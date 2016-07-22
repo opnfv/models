@@ -24,7 +24,8 @@
 #   2: Setup of the Cloudify Manager in the docker container
 
 # Find external network name
-func get_external_net () {
+
+function get_external_net () {
   LINE=4
   ID=$(openstack network list | awk "NR==$LINE{print \$2}")
   while [[  $ID ]]
@@ -48,8 +49,7 @@ if [ "$1" == "1" ]; then
     sudo docker pull ubuntu:trusty
     sudo service docker start
     sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc:/root/admin-openrc -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu /bin/bash
-  else 
-    # Centos
+    exit 0
   fi
 else
   # Install dependencies - OS specific
@@ -58,8 +58,6 @@ else
     apt-get install -y python python-dev python-pip wget 
 #    apt-get install -y apg git gcc python-dev libxml2 libxslt1-dev libzip-dev 
 #    pip install --upgrade pip virtualenv setuptools pbr tox
-  else 
-    # Centos
   fi
 fi
 
@@ -97,13 +95,11 @@ sed -i -- "s/keystone_url: ''/keystone_url: '$OS_AUTH_URL'/g" openstack-manager-
 sed -i -- "s/region: ''/region: '$OS_REGION_NAME'/g" openstack-manager-blueprint-inputs.yaml
 sed -i -- "s/#manager_public_key_name: ''/manager_public_key_name: 'manager-key'/g" openstack-manager-blueprint-inputs.yaml
 sed -i -- "s/#agent_public_key_name: ''/agent_public_key_name: 'manager-key'/g" openstack-manager-blueprint-inputs.yaml
-image=$(openstack image list | awk "/ cirros-0.3.3-x86_64 / { print \$2 }")
-if [ -z $image ]; then glance --os-image-api-version 1 image-create --name cirros-0.3.3-x86_64 --disk-format qcow2 --location http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img --container-format bare
+image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud / { print \$2 }")
+if [ -z $image ]; then glance --os-image-api-version 1 image-create --name CentOS-7-x86_64-GenericCloud --disk-format qcow2 --location http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2 --container-format bare
 fi
 sed -i -- "s/image_id: ''/image_id: '$image'/g" openstack-manager-blueprint-inputs.yaml
 flavor=$(nova flavor-show m1.tiny | awk "/ id / { print \$4 }")
-if [ -z $image ]; then glance --os-image-api-version 1 image-create --name cirros-0.3.3-x86_64 --disk-format qcow2 --location http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img --container-format bare
-fi
 sed -i -- "s/flavor_id: ''/flavor_id: 'm1.tiny'/g" openstack-manager-blueprint-inputs.yaml
 get_external_net
 sed -i -- "s/external_network_name: ''/external_network_name: '$EXTERNAL_NETWORK_NAME'/g" openstack-manager-blueprint-inputs.yaml
