@@ -28,10 +28,10 @@
 function get_external_net () {
   LINE=4
   ID=$(openstack network list | awk "NR==$LINE{print \$2}")
-  while [[  $ID ]]
+  while [[ $ID ]]
     do
     if [[ $(openstack network show $ID | awk "/ router:external / { print \$4 }") == "True" ]]; then break; fi
-    let ID=$ID+1
+    ((ID+=1))
   done 
   if [[ $ID ]]; then 
     EXTERNAL_NETWORK_NAME=$(openstack network show $ID | awk "/ name / { print \$4 }")  
