@@ -19,23 +19,69 @@
 # Status: this is a work in progress, under test.
 #
 # How to use:
-#   $ bash cloudify-setup.sh [ 1 || 2 ]
+#   Save this file in ~/cloudify/cloudify-setup.sh
+#   $ bash ~/cloudify/cloudify-setup.sh [ 1 || 2 ]
 #   1: Initial setup of the docker container
 #   2: Setup of the Cloudify Manager in the docker container
 
 # Find external network name
 
+function setenv () {
+
+if [ "$dist" == "Ubuntu" ]; then
+  echo "Create the environment file"
+  KEYSTONE_HOST=$(juju status --format=short | awk "/keystone\/0/ { print \$3 }")
+  cat <<EOF >~/admin-openrc
+export CONGRESS_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
+export HORIZON_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
+export KEYSTONE_HOST=$KEYSTONE_HOST
+export CEILOMETER_HOST=$(juju status --format=short | awk "/ceilometer\/0/ { print \$3 }")
+export CINDER_HOST=$(juju status --format=short | awk "/cinder\/0/ { print \$3 }")
+export GLANCE_HOST=$(juju status --format=short | awk "/glance\/0/ { print \$3 }")
+export NEUTRON_HOST=$(juju status --format=short | awk "/neutron-api\/0/ { print \$3 }")
+export NOVA_HOST=$(juju status --format=short | awk "/nova-cloud-controller\/0/ { print \$3 }")
+export OS_USERNAME=admin
+export OS_PASSWORD=openstack
+export OS_TENANT_NAME=admin
+export OS_AUTH_URL=http://$KEYSTONE_HOST:5000/v2.0
+export OS_REGION_NAME=RegionOne
+EOF
+else
+  # Centos
+  echo "Centos-based install"
+  echo "Setup undercloud environment so we can get overcloud Controller server address"
+  source ~/stackrc
+  echo "Get address of Controller node"
+  export CONTROLLER_HOST1=$(openstack server list | awk "/overcloud-controller-0/ { print \$8 }" | sed 's/ctlplane=//g')
+  echo "Create the environment file"
+  cat <<EOF >~/admin-openrc
+export CONGRESS_HOST=$CONTROLLER_HOST1
+export KEYSTONE_HOST=$CONTROLLER_HOST1
+export CEILOMETER_HOST=$CONTROLLER_HOST1
+export CINDER_HOST=$CONTROLLER_HOST1
+export GLANCE_HOST=$CONTROLLER_HOST1
+export NEUTRON_HOST=$CONTROLLER_HOST1
+export NOVA_HOST=$CONTROLLER_HOST1
+EOF
+  cat ~/overcloudrc >>~/admin-openrc
+  source ~/overcloudrc
+  export OS_REGION_NAME=$(openstack endpoint list | awk "/ nova / { print \$4 }")
+  # sed command below is a workaound for a bug - region shows up twice for some reason
+  cat <<EOF | sed '$d' >>~/admin-openrc
+export OS_REGION_NAME=$OS_REGION_NAME
+EOF
+fi
+source ~/admin-openrc
+}
+
 function get_external_net () {
-  LINE=4
-  ID=$(openstack network list | awk "NR==$LINE{print \$2}")
-  while [[ $ID ]]
-    do
-    if [[ $(openstack network show $ID | awk "/ router:external / { print \$4 }") == "External" ]]; then break; fi
-    ((LINE+=1))
-    ID=$(openstack network list | awk "NR==$LINE{print \$2}")
+  network_ids=($(neutron net-list|grep -v "+"|grep -v name|awk '{print $2}'))
+  for id in ${network_ids[@]}; do
+      [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && ext_net_id=${id}
   done
-  if [[ $ID ]]; then
-    EXTERNAL_NETWORK_NAME=$(openstack network show $ID | awk "/ name / { print \$4 }")
+  if [[ $ext_net_id ]]; then 
+    EXTERNAL_NETWORK_NAME=$(openstack network show $ext_net_id | awk "/ name / { print \$4 }")
+    EXTERNAL_SUBNET_ID=$(openstack network show $EXTERNAL_NETWORK_NAME | awk "/ subnets / { print \$4 }")
   else
     echo "cloudify-setup.sh: External network not found"
     exit 1
@@ -44,20 +90,33 @@ function get_external_net () {
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 if [ "$1" == "1" ]; then
+  echo "cloudify-setup.sh: Setup admin-openrc"
+  setenv
   echo "cloudify-setup.sh: Setup container"
   if [ "$dist" == "Ubuntu" ]; then
     sudo docker pull ubuntu:trusty
     sudo service docker start
-    sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc:/root/admin-openrc -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu /bin/bash
+    sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc:/root/admin-openrc -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:trusty /bin/bash
     exit 0
   fi
-else
-  echo "cloudify-setup.sh: Install dependencies - OS specific"
-  if [ "$dist" == "Ubuntu" ]; then
-    apt-get update
-    apt-get install -y python python-dev python-pip wget ssh-keygen
+else 
+  if [ "$1" == "2" ]; then
+    echo "cloudify-setup.sh: Install dependencies - OS specific"
+    if [ "$dist" == "Ubuntu" ]; then
+      apt-get update
+      apt-get install -y python
+      apt-get install -y python-dev
+      apt-get install -y python-pip
+      apt-get install -y wget
+      apt-get install -y openssh-server
 #    apt-get install -y apg git gcc python-dev libxml2 libxslt1-dev libzip-dev 
 #    pip install --upgrade pip virtualenv setuptools pbr tox
+    fi
+  else 
+    echo "usage: bash cloudify-setup.sh [ 1 || 2 ]"
+    echo "1: Initial setup of the docker container"
+    echo "2: Setup of the Cloudify Manager in the docker container"
+    exit 1
   fi
 fi
 
@@ -70,7 +129,7 @@ echo "cloudify-setup.sh: Upgrage pip again - needs to be the latest version due 
 pip install --upgrade pip
 
 echo "cloudify-setup.sh: install python-openstackclient python-glanceclient"
-pip install python-openstackclient python-glanceclient
+pip install python-openstackclient python-glanceclient  python-neutronclient
 
 echo "cloudify-setup.sh: cleanup any previous install attempt"
 rm -rf cloudify
