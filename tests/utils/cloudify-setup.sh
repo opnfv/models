@@ -182,9 +182,11 @@ echo "cloudify-setup.sh: Setup agent_public_key_name"
 sed -i -- "s/#agent_public_key_name: ''/agent_public_key_name: 'cloudify-agent'/g" openstack-manager-blueprint-inputs.yaml
 
 echo "cloudify-setup.sh: Setup image_id"
-image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud / { print \$2 }")
-if [ -z $image ]; then glance --os-image-api-version 1 image-create --name CentOS-7-x86_64-GenericCloud --disk-format qcow2 --location http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2 --container-format bare
+# CentOS-7-x86_64-GenericCloud.qcow2 failed to be routable (?), so changed to 1607 version
+image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
+if [ -z $image ]; then glance --os-image-api-version 1 image-create --name CentOS-7-x86_64-GenericCloud-1607 --disk-format qcow2 --location http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2-1607 --container-format bare
 fi
+image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
 sed -i -- "s/image_id: ''/image_id: '$image'/g" openstack-manager-blueprint-inputs.yaml
 
 echo "cloudify-setup.sh: Setup flavor_id"
@@ -195,6 +197,10 @@ echo "cloudify-setup.sh: Setup external_network_name"
 get_external_net
 sed -i -- "s/external_network_name: ''/external_network_name: '$EXTERNAL_NETWORK_NAME'/g" openstack-manager-blueprint-inputs.yaml
 
+# By default, only the cloudify-management-router is setup as DNS server, and it was failing to resolve internet domain names, which was blocking download of needed resources
+echo "cloudify-setup.sh: Add nameservers"
+sed -i -- "s/#management_subnet_dns_nameservers: \[\]/management_subnet_dns_nameservers: \[8.8.8.8\]/g" openstack-manager-blueprint-inputs.yaml
+
 echo "cloudify-setup.sh: Bootstrap the manager"
-cfy bootstrap --install-plugins -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
+cfy bootstrap --install-plugins --keep-up-on-failure -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
 
