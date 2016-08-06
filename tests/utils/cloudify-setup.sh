@@ -19,8 +19,9 @@
 # Status: this is a work in progress, under test.
 #
 # How to use:
-#   Save this file in /tmp/cloudify/cloudify-setup.sh
-#   $ bash /tmp/cloudify/cloudify-setup.sh [ 1 || 2 ]
+#   $ bash cloudify-setup.sh [cloudify-cli|cloudify-manager] [ 1 || 2 ]
+#   cloudify-cli: use Cloudify CLI
+#   cloudify-manager: use Cloudify Manager
 #   1: Initial setup of the docker container
 #   2: Setup of the Cloudify Manager in the docker container
 
@@ -29,7 +30,7 @@ if [ "$dist" == "Ubuntu" ]; then
   echo "cloudify-setup.sh: Ubuntu-based install"
   echo "cloudify-setup.sh: Create the environment file"
   KEYSTONE_HOST=$(juju status --format=short | awk "/keystone\/0/ { print \$3 }")
-  cat <<EOF >/tmp/cloudify/admin-openrc
+  cat <<EOF >/tmp/cloudify/admin-openrc.sh
 export CONGRESS_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
 export HORIZON_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
 export KEYSTONE_HOST=$KEYSTONE_HOST
@@ -52,7 +53,7 @@ else
   echo "cloudify-setup.sh: Get address of Controller node"
   export CONTROLLER_HOST1=$(openstack server list | awk "/overcloud-controller-0/ { print \$8 }" | sed 's/ctlplane=//g')
   echo "cloudify-setup.sh: Create the environment file"
-  cat <<EOF >/tmp/cloudify/admin-openrc
+  cat <<EOF >/tmp/cloudify/admin-openrc.sh
 export CONGRESS_HOST=$CONTROLLER_HOST1
 export KEYSTONE_HOST=$CONTROLLER_HOST1
 export CEILOMETER_HOST=$CONTROLLER_HOST1
@@ -61,15 +62,15 @@ export GLANCE_HOST=$CONTROLLER_HOST1
 export NEUTRON_HOST=$CONTROLLER_HOST1
 export NOVA_HOST=$CONTROLLER_HOST1
 EOF
-  cat ~/overcloudrc >>/tmp/cloudify/admin-openrc
+  cat ~/overcloudrc >>/tmp/cloudify/admin-openrc.sh
   source ~/overcloudrc
   export OS_REGION_NAME=$(openstack endpoint list | awk "/ nova / { print \$4 }")
   # sed command below is a workaound for a bug - region shows up twice for some reason
-  cat <<EOF | sed '$d' >>/tmp/cloudify/admin-openrc
+  cat <<EOF | sed '$d' >>/tmp/cloudify/admin-openrc.sh
 export OS_REGION_NAME=$OS_REGION_NAME
 EOF
 fi
-source /tmp/cloudify/admin-openrc
+source /tmp/cloudify/admin-openrc.sh
 }
 
 function get_external_net () {
@@ -89,19 +90,18 @@ function get_external_net () {
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 if [ "$1" == "1" ]; then
   echo "cloudify-setup.sh: Copy this script to /tmp/cloudify"
-  if [ -d "/tmp/cloudify" ]; then rm -rf /tmp/cloudify; fi  
-  mkdir /tmp/cloudify
   cp $0 /tmp/cloudify/.
+  chmod 755 /tmp/cloudify/*.sh
 
-  echo "cloudify-setup.sh: Setup admin-openrc"
+  echo "cloudify-setup.sh: Setup admin-openrc.sh"
   setenv
   echo "cloudify-setup.sh: Setup container"
   if [ "$dist" == "Ubuntu" ]; then
     # xenial is needed for python 3.5
     sudo docker pull ubuntu:xenial
     sudo service docker start
-#    sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc:/root/admin-openrc -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
-    sudo docker run -it -d -v ~/tmp/cloudify/admin-openrc:/root/admin-openrc -v /tmp/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
+#    sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
+    sudo docker run -it -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash
     exit 0
   fi
 else 
@@ -161,8 +161,8 @@ mv 3.4.tar.gz cloudify-manager-blueprints.tar.gz
 tar -xzvf cloudify-manager-blueprints.tar.gz
 cd cloudify-manager-blueprints-3.4
 
-echo "cloudify-setup.sh: Setup admin-openrc"
-source ~/admin-openrc
+echo "cloudify-setup.sh: Setup admin-openrc.sh"
+source /tmp/cloudify/admin-openrc.sh
 
 echo "cloudify-setup.sh: Setup keystone_username"
 sed -i -- "s/keystone_username: ''/keystone_username: '$OS_USERNAME'/g" openstack-manager-blueprint-inputs.yaml

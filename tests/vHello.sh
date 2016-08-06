@@ -18,9 +18,10 @@
 # Status: this is a work in progress, under test.
 #
 # How to use:
-#   Save this file and cloudify-setup.sh in ~/tmp/cloudify/
-#   $ bash /tmp/cloudify/vHello.sh [setup | start | clean]
-#   setup: setup Cloudify Manager
+#   $ bash vHello.sh [cloudify-cli|cloudify-manager] [setup|start|clean]
+#   cloudify-cli: use Cloudify CLI
+#   cloudify-manager: use Cloudify Manager
+#   setup: setup test environment
 #   start: run test
 #   clean: cleanup after test
 
@@ -38,29 +39,80 @@ fail() {
   exit 1
 }
 
-if [[ "$1" == "setup" ]]; then
-  echo "vHello.sh: cloudify-setup part 1"
-  bash /tmp/cloudify/cloudify-setup.sh 1
+select_manager() {
+  echo "vHello.sh: select manager to use"
+  MANAGER_IP=$(openstack server list | awk "/ cloudify-manager-server / { print \$9 }")
+  cfy use -t $MANAGER_IP
+  if [ $? -eq 1 ]; then fail; fi
+}
 
-  echo "vHello.sh: cloudify-setup part 2"
-  CONTAINER=$(sudo docker ps -l | awk "/ ubuntu:xenial / { print \$1 }")
-  if [[ $(sudo docker exec $CONTAINER /root/cloudify-setup.sh 2) ]]; then fail; fi
+start() {
+  echo "vHello.sh: reset blueprints folder"
+  if [[ -d /tmp/cloudify/blueprints ]]; then rm -rf /tmp/cloudify/blueprints; fi
+  mkdir /tmp/cloudify/blueprints
+  cd /tmp/cloudify/blueprints
+
+  echo "vHello.sh: clone cloudify-hello-world-example"
+  git clone https://github.com/cloudify-cosmo/cloudify-hello-world-example.git
+  cd cloudify-hello-world-example
+  git checkout 3.4.1-build
+
+  echo "vHello.sh: create blueprint inputs file"
+  # Set host image per Cloudify agent compatibility: http://docs.getcloudify.org/3.4.0/agents/overview/
+  cat <<EOF >vHello-inputs.yaml
+  image: CentOS-7-x86_64-GenericCloud-1607
+  flavor: m1.small
+  agent_user: centos
+  webserver_port: 8080
+EOF
+
+  echo "vHello.sh: activate cloudify Virtualenv"
+  source ~/cloudify/venv/bin/activate
+
+  echo "vHello.sh: setup OpenStack CLI environment"
+  source /tmp/cloudify/admin-openrc.sh
+
+  echo "vHello.sh: initialize cloudify environment"
+  cd /tmp/cloudify/blueprints
+  cfy init -r
+
+  if [[ "$1" == "cloudify-manager" ]]; then select_manager; fi
+
+  echo "vHello.sh: upload blueprint to manager"
+  cfy blueprints delete -b cloudify-hello-world-example
+  cfy blueprints upload -p cloudify-hello-world-example/blueprint.yaml -b cloudify-hello-world-example
+  if [ $? -eq 1 ]; then fail; fi
+
+  echo "vHello.sh: create vHello deployment"
+  cd /tmp/cloudify/blueprints/cloudify-hello-world-example
+  cfy deployments create --debug -d vHello -i vHello-inputs.yaml -b cloudify-hello-world-example
+  if [ $? -eq 1 ]; then fail; fi
+
+  echo "vHello.sh: execute 'install' workflow for vHello deployment"
+  cfy executions start -w install -d vHello --timeout 1800
+  if [ $? -eq 1 ]; then fail; fi
+
+  echo "vHello.sh: verify vHello server is running"
+  SERVER_IP=$(cfy deployments outputs -d vHello | awk "/ Value: / { print \$2 }")
+  apt-get install -y curl
+  if [[ $(curl $SERVER_IP | grep -c "Hello, World!") != 1 ]]; then fail; fi
+
   pass
-fi
+}
 
-if [[ "$1" == "start" ]]; then
-  echo "vHello.sh: run vHello test in cloudify-setup container"
-  CONTAINER=$(sudo docker ps -l | awk "/ ubuntu:xenial / { print \$1 }")
-  if [[ $(sudo docker exec $CONTAINER /root/vHello.sh) ]]; then fail; fi
-  pass
-fi
+clean() {
+  echo "vHello.sh: activate cloudify Virtualenv"
+  source ~/cloudify/venv/bin/activate
 
-echo "vHello.sh: select manager to use"
-MANAGER_IP=$(openstack server list | awk "/ cloudify-manager-server / { print \$9 }")
-cfy use -t $MANAGER_IP
-if [ $? -eq 1 ]; then fail; fi
+  echo "vHello.sh: setup OpenStack CLI environment"
+  source /tmp/cloudify/admin-openrc.sh
 
-if [[ "$1" == "clean" ]]; then
+  echo "vHello.sh: initialize cloudify environment"
+  cd /tmp/cloudify/blueprints
+  cfy init -r
+
+  if [[ "$1" == "cloudify-manager" ]]; then select_manager; fi
+
   echo "vHello.sh: uninstall vHello blueprint"
   cfy executions start -w uninstall -d vHello
 
@@ -68,39 +120,33 @@ if [[ "$1" == "clean" ]]; then
   cfy deployments delete -d vHello
   if [ $? -eq 1 ]; then fail; fi
   pass
+}
+
+if [[ "$2" == "setup" ]]; then
+  echo "vHello.sh: Setup temp test folder /tmp/cloudify and copy this script there"
+  mkdir /tmp/cloudify
+  chmod 777 /tmp/cloudify/
+  cp $0 /tmp/cloudify/.
+  chmod 755 /tmp/cloudify/*.sh
+
+  echo "vHello.sh: cloudify-setup part 1"
+  bash utils/cloudify-setup.sh $1 1
+
+  echo "vHello.sh: cloudify-setup part 2"
+  CONTAINER=$(sudo docker ps -l | awk "/ ubuntu:xenial / { print \$1 }")
+  sudo docker exec $CONTAINER /tmp/cloudify/cloudify-setup.sh $1 2
+  if [ $? -eq 1 ]; then fail; fi
+  pass
+else
+  if [[ $# -eq 3 ]]; then
+    # running inside the cloudify container, ready to go
+    if [[ "$3" == "start" ]]; then start $1; fi
+    if [[ "$3" == "clean" ]]; then clean $1; fi    
+  else
+    echo "vHello.sh: pass $2 command to vHello.sh in cloudify container"
+    CONTAINER=$(sudo docker ps -l | awk "/ ubuntu:xenial / { print \$1 }")
+    sudo docker exec $CONTAINER /tmp/cloudify/vHello.sh $1 $2 $2
+    if [ $? -eq 1 ]; then fail; fi
+    pass
+  fi
 fi
-
-echo "vHello.sh: reset blueprints folder"
-cd ~
-rm -rf blueprints
-mkdir blueprints
-
-echo "vHello.sh: clone cloudify-hello-world-example"
-cd blueprints
-git clone https://github.com/cloudify-cosmo/cloudify-hello-world-example.git
-git checkout 3.4.1-build
-
-echo "vHello.sh: create blueprint inputs file"
-# Set host image per Cloudify agent compatibility: http://docs.getcloudify.org/3.4.0/agents/overview/
-cat <<EOF >vHello-inputs.yaml
-  image: CentOS-7-x86_64-GenericCloud-1607
-  flavor: m1.small
-  agent_user: centos
-  webserver_port: 8080
-EOF
-
-echo "vHello.sh: create vHello deployment"
-cfy deployments create --debug -d vHello -i vHello-inputs.yaml -b cloudify-hello-world-example
-if [ $? -eq 1 ]; then fail; fi
-
-echo "vHello.sh: execute 'install' workflow for vHello deployment"
-cfy executions start -w install -d vHello --timeout 1800
-if [ $? -eq 1 ]; then fail; fi
-
-echo "vHello.sh: verify vHello server is running"
-SERVER_IP=$(cfy deployments outputs -d vHello | awk "/ Value: / { print \$2 }")
-apt-get install -y curl
-if [[ $(curl $SERVER_IP | grep -c "Hello, World!") != 1 ]]; then fail; fi
-
-pass
-
