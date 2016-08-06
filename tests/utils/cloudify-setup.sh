@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2015-2016 AT&T Intellectual Property, Inc
+# Copyright 2016 AT&T Intellectual Property, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,24 +14,22 @@
 # limitations under the License.
 #
 # What this is: Setup script for the Cloudify Manager starting from an
-# Unbuntu Trusty docker container.
+# Unbuntu Xenial docker container.
 #
 # Status: this is a work in progress, under test.
 #
 # How to use:
-#   Save this file in ~/cloudify/cloudify-setup.sh
-#   $ bash ~/cloudify/cloudify-setup.sh [ 1 || 2 ]
+#   Save this file in /tmp/cloudify/cloudify-setup.sh
+#   $ bash /tmp/cloudify/cloudify-setup.sh [ 1 || 2 ]
 #   1: Initial setup of the docker container
 #   2: Setup of the Cloudify Manager in the docker container
 
-# Find external network name
-
 function setenv () {
-
 if [ "$dist" == "Ubuntu" ]; then
-  echo "Create the environment file"
+  echo "cloudify-setup.sh: Ubuntu-based install"
+  echo "cloudify-setup.sh: Create the environment file"
   KEYSTONE_HOST=$(juju status --format=short | awk "/keystone\/0/ { print \$3 }")
-  cat <<EOF >~/admin-openrc
+  cat <<EOF >/tmp/cloudify/admin-openrc
 export CONGRESS_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
 export HORIZON_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
 export KEYSTONE_HOST=$KEYSTONE_HOST
@@ -48,13 +46,13 @@ export OS_REGION_NAME=RegionOne
 EOF
 else
   # Centos
-  echo "Centos-based install"
-  echo "Setup undercloud environment so we can get overcloud Controller server address"
+  echo "cloudify-setup.sh: Centos-based install"
+  echo "cloudify-setup.sh: Setup undercloud environment so we can get overcloud Controller server address"
   source ~/stackrc
-  echo "Get address of Controller node"
+  echo "cloudify-setup.sh: Get address of Controller node"
   export CONTROLLER_HOST1=$(openstack server list | awk "/overcloud-controller-0/ { print \$8 }" | sed 's/ctlplane=//g')
-  echo "Create the environment file"
-  cat <<EOF >~/admin-openrc
+  echo "cloudify-setup.sh: Create the environment file"
+  cat <<EOF >/tmp/cloudify/admin-openrc
 export CONGRESS_HOST=$CONTROLLER_HOST1
 export KEYSTONE_HOST=$CONTROLLER_HOST1
 export CEILOMETER_HOST=$CONTROLLER_HOST1
@@ -63,15 +61,15 @@ export GLANCE_HOST=$CONTROLLER_HOST1
 export NEUTRON_HOST=$CONTROLLER_HOST1
 export NOVA_HOST=$CONTROLLER_HOST1
 EOF
-  cat ~/overcloudrc >>~/admin-openrc
+  cat ~/overcloudrc >>/tmp/cloudify/admin-openrc
   source ~/overcloudrc
   export OS_REGION_NAME=$(openstack endpoint list | awk "/ nova / { print \$4 }")
   # sed command below is a workaound for a bug - region shows up twice for some reason
-  cat <<EOF | sed '$d' >>~/admin-openrc
+  cat <<EOF | sed '$d' >>/tmp/cloudify/admin-openrc
 export OS_REGION_NAME=$OS_REGION_NAME
 EOF
 fi
-source ~/admin-openrc
+source /tmp/cloudify/admin-openrc
 }
 
 function get_external_net () {
@@ -90,6 +88,11 @@ function get_external_net () {
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 if [ "$1" == "1" ]; then
+  echo "cloudify-setup.sh: Copy this script to /tmp/cloudify"
+  if [ -d "/tmp/cloudify" ]; then rm -rf /tmp/cloudify; fi  
+  mkdir /tmp/cloudify
+  cp $0 /tmp/cloudify/.
+
   echo "cloudify-setup.sh: Setup admin-openrc"
   setenv
   echo "cloudify-setup.sh: Setup container"
@@ -97,7 +100,8 @@ if [ "$1" == "1" ]; then
     # xenial is needed for python 3.5
     sudo docker pull ubuntu:xenial
     sudo service docker start
-    sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc:/root/admin-openrc -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
+#    sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc:/root/admin-openrc -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
+    sudo docker run -it -d -v ~/tmp/cloudify/admin-openrc:/root/admin-openrc -v /tmp/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
     exit 0
   fi
 else 
@@ -110,6 +114,7 @@ else
       apt-get install -y python-pip
       apt-get install -y wget
       apt-get install -y openssh-server
+      apt-get install -y git
 #    apt-get install -y apg git gcc python-dev libxml2 libxslt1-dev libzip-dev 
 #    pip install --upgrade pip virtualenv setuptools pbr tox
     fi
@@ -130,12 +135,12 @@ echo "cloudify-setup.sh: Upgrage pip again - needs to be the latest version due 
 pip install --upgrade pip
 
 echo "cloudify-setup.sh: install python-openstackclient python-glanceclient"
-pip install python-openstackclient python-glanceclient  python-neutronclient
+pip install --upgrade python-openstackclient python-glanceclient  python-neutronclient
 
 echo "cloudify-setup.sh: cleanup any previous install attempt"
-rm -rf cloudify
-rm -rf cloudify-manager
-rm get-cloudify.py
+if [ -d "~/cloudify" ]; then rm -rf ~/cloudify; fi  
+if [ -d "~/cloudify-manager" ]; then rm -rf ~/cloudify-manager; fi  
+rm ~/get-cloudify.py
 
 echo "cloudify-setup.sh: Create virtualenv"
 virtualenv ~/cloudify/venv
@@ -203,4 +208,9 @@ sed -i -- "s/#management_subnet_dns_nameservers: \[\]/management_subnet_dns_name
 
 echo "cloudify-setup.sh: Bootstrap the manager"
 cfy bootstrap --install-plugins --keep-up-on-failure -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
+
+echo "cloudify-setup.sh: install needed packages on the manager to support blueprints 'not using managed plugins'"
+# See https://cloudifysource.atlassian.net/browse/CFY-5050
+cfy ssh -c "sudo yum install -y gcc gcc-c++ python-devel"
+
 
