@@ -64,7 +64,7 @@ select_manager() {
 start() {
   echo "vHello.sh: reset blueprints folder"
   if [[ -d /tmp/cloudify/blueprints ]]; then rm -rf /tmp/cloudify/blueprints; fi
-  mkdir /tmp/cloudify/blueprints
+  mkdir -p /tmp/cloudify/blueprints
   cd /tmp/cloudify/blueprints
 
   echo "vHello.sh: clone cloudify-hello-world-example"
@@ -85,11 +85,11 @@ agent_user: centos
 webserver_port: 8080
 EOF
 
-# Workarounds for error in allocating floating IP 
-# Workflow failed: Task failed 'neutron_plugin.floatingip.create' -> Failed to parse request. Required attribute 'floating_network_id' not specified [status_code=400]
-  get_floating_net
-
   if [[ "$1" == "cloudify-cli" ]]; then 
+    # Workarounds for error in allocating floating IP 
+    # Workflow failed: Task failed 'neutron_plugin.floatingip.create' -> Failed to parse request. Required attribute 'floating_network_id' not specified [status_code=400]
+    get_floating_net
+
     echo "vHello.sh: update blueprint with parameters needed for Cloudify CLI use"
     cat <<EOF >>vHello-inputs.yaml
 external_network_name: $floating_network_name
@@ -135,7 +135,6 @@ EOF
     if [ $? -eq 1 ]; then fail; fi
 
     echo "vHello.sh: create vHello deployment via manager"
-    cd /tmp/cloudify/blueprints/cloudify-hello-world-example
     cfy deployments create --debug -d vHello -i vHello-inputs.yaml -b cloudify-hello-world-example
     if [ $? -eq 1 ]; then fail; fi
 
