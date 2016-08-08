@@ -191,7 +191,7 @@ if [ "$1" == "cloudify-manager" ]; then
   # CentOS-7-x86_64-GenericCloud.qcow2 failed to be routable (?), so changed to 1607 version
   image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
   if [ -z $image ]; then 
-    glance --os-image-api-version 1 image-create --name CentOS-7-x86_64-GenericCloud-1607 --disk-format qcow2 --location http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2-1607 --container-format bare
+    glance --os-image-api-version 1 image-create --name CentOS-7-x86_64-GenericCloud-1607 --disk-format qcow2 --location http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1607.qcow2 --container-format bare
   fi
   image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
   sed -i -- "s/image_id: ''/image_id: '$image'/g" openstack-manager-blueprint-inputs.yaml
@@ -209,7 +209,7 @@ if [ "$1" == "cloudify-manager" ]; then
   sed -i -- "s/#management_subnet_dns_nameservers: \[\]/management_subnet_dns_nameservers: \[8.8.8.8\]/g" openstack-manager-blueprint-inputs.yaml
 
   echo "cloudify-setup.sh: Bootstrap the manager"
-  cfy bootstrap --install-plugins --keep-up-on-failure -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
+  cfy bootstrap --install-plugins --keep-up-on-failure --task-retries=10 -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
 
   echo "cloudify-setup.sh: install needed packages to support blueprints 'not using managed plugins'"
   # See https://cloudifysource.atlassian.net/browse/CFY-5050
