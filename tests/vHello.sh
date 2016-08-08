@@ -25,6 +25,8 @@
 #   start: run test
 #   clean: cleanup after test
 
+set -x
+
 pass() {
   echo "Hooray!"
   set +x #echo off
@@ -37,6 +39,19 @@ fail() {
   echo "Test Failed!"
   set +x
   exit 1
+}
+
+function get_floating_net () {
+  network_ids=($(neutron net-list|grep -v "+"|grep -v name|awk '{print $2}'))
+  for id in ${network_ids[@]}; do
+      [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && floating_network_id=${id}
+  done
+  if [[ $floating_network_id ]]; then 
+    floating_network_name=$(openstack network show $floating_network_id | awk "/ name / { print \$4 }")
+  else
+    echo "vHello.sh: Floating network not found"
+    exit 1
+  fi
 }
 
 select_manager() {
@@ -57,40 +72,87 @@ start() {
   cd cloudify-hello-world-example
   git checkout 3.4.1-build
 
+  echo "vHello.sh: setup OpenStack CLI environment"
+  source /tmp/cloudify/admin-openrc.sh
+
   echo "vHello.sh: create blueprint inputs file"
   # Set host image per Cloudify agent compatibility: http://docs.getcloudify.org/3.4.0/agents/overview/
+  cd /tmp/cloudify/blueprints
   cat <<EOF >vHello-inputs.yaml
-  image: CentOS-7-x86_64-GenericCloud-1607
-  flavor: m1.small
-  agent_user: centos
-  webserver_port: 8080
+image: CentOS-7-x86_64-GenericCloud-1607
+flavor: m1.small
+agent_user: centos
+webserver_port: 8080
 EOF
+
+# Workarounds for error in allocating floating IP 
+# Workflow failed: Task failed 'neutron_plugin.floatingip.create' -> Failed to parse request. Required attribute 'floating_network_id' not specified [status_code=400]
+  get_floating_net
+
+  if [[ "$1" == "cloudify-cli" ]]; then 
+    echo "vHello.sh: update blueprint with parameters needed for Cloudify CLI use"
+    cat <<EOF >>vHello-inputs.yaml
+external_network_name: $floating_network_name
+EOF
+
+    sed -i -- 's/description: Openstack flavor name or id to use for the new server/description: Openstack flavor name or id to use for the new server\n  external_network_name:\n    description: External network name/g' cloudify-hello-world-example/blueprint.yaml
+
+    sed -i -- 's/type: cloudify.openstack.nodes.FloatingIP/type: cloudify.openstack.nodes.FloatingIP\n    properties:\n      floatingip:\n        floating_network_name: { get_input: external_network_name }/g' cloudify-hello-world-example/blueprint.yaml
+
+# Workarounds for error in allocating keypair
+# Task failed 'nova_plugin.server.create' -> server must have a keypair, yet no keypair was connected to the server node, the "key_name" nested property wasn't used, and there is no agent keypair in the provider context
+# Tried the following but keypair is not supported by http://www.getcloudify.org/spec/openstack-plugin/1.4/plugin.yaml
+#    sed -i -- 's/target: security_group/target: security_group\n      - type: cloudify.openstack.server_connected_to_keypair\n        target: keypair/g' cloudify-hello-world-example/blueprint.yaml
+
+    sed -i -- 's/description: External network name/description: External network name\n  private_key_path:\n    description: Path to private key/g' cloudify-hello-world-example/blueprint.yaml
+
+    sed -i -- '0,/interfaces:/s//interfaces:\n      cloudify.interfaces.lifecycle:\n        start:\n          implementation: openstack.nova_plugin.server.start\n          inputs:\n            private_key_path:  { get_input: private_key_path }/' cloudify-hello-world-example/blueprint.yaml
+
+    echo "vHello.sh: Create Nova key pair"
+    mkdir -p ~/.ssh
+    nova keypair-delete vHello
+    nova keypair-add vHello > ~/.ssh/vHello.pem
+    chmod 600 ~/.ssh/vHello.pem
+
+    echo "vHello.sh: update blueprint with parameters needed for Cloudify CLI use"
+    cat <<EOF >>vHello-inputs.yaml
+private_key_path: /root/.ssh/vHello.pem
+EOF
+  fi
 
   echo "vHello.sh: activate cloudify Virtualenv"
   source ~/cloudify/venv/bin/activate
-
-  echo "vHello.sh: setup OpenStack CLI environment"
-  source /tmp/cloudify/admin-openrc.sh
 
   echo "vHello.sh: initialize cloudify environment"
   cd /tmp/cloudify/blueprints
   cfy init -r
 
-  if [[ "$1" == "cloudify-manager" ]]; then select_manager; fi
+  if [[ "$1" == "cloudify-manager" ]]; then 
+    select_manager
+    echo "vHello.sh: upload blueprint via manager"
+    cfy blueprints delete -b cloudify-hello-world-example
+    cfy blueprints upload -p cloudify-hello-world-example/blueprint.yaml -b cloudify-hello-world-example
+    if [ $? -eq 1 ]; then fail; fi
 
-  echo "vHello.sh: upload blueprint to manager"
-  cfy blueprints delete -b cloudify-hello-world-example
-  cfy blueprints upload -p cloudify-hello-world-example/blueprint.yaml -b cloudify-hello-world-example
-  if [ $? -eq 1 ]; then fail; fi
+    echo "vHello.sh: create vHello deployment via manager"
+    cd /tmp/cloudify/blueprints/cloudify-hello-world-example
+    cfy deployments create --debug -d vHello -i vHello-inputs.yaml -b cloudify-hello-world-example
+    if [ $? -eq 1 ]; then fail; fi
 
-  echo "vHello.sh: create vHello deployment"
-  cd /tmp/cloudify/blueprints/cloudify-hello-world-example
-  cfy deployments create --debug -d vHello -i vHello-inputs.yaml -b cloudify-hello-world-example
-  if [ $? -eq 1 ]; then fail; fi
-
-  echo "vHello.sh: execute 'install' workflow for vHello deployment"
-  cfy executions start -w install -d vHello --timeout 1800
-  if [ $? -eq 1 ]; then fail; fi
+    echo "vHello.sh: execute 'install' workflow for vHello deployment via manager"
+    cfy executions start -w install -d vHello --timeout 1800
+    if [ $? -eq 1 ]; then fail; fi
+  else 
+    echo "vHello.sh: install local blueprint"
+    cfy local install --install-plugins -i vHello-inputs.yaml -p cloudify-hello-world-example/blueprint.yaml --allow-custom-parameters --parameters="floating_network_name=$floating_network_name"
+    if [ $? -eq 1 ]; then fail; fi
+#    cfy local install replaces the following, per http://getcloudify.org/2016/04/07/cloudify-update-from-developers-features-improvements-open-source-python-devops.html
+#    cfy local init --install-plugins -i vHello-inputs.yaml -p cloudify-hello-world-example/blueprint.yaml 
+#    cfy local execute -w install
+#    Not sure if needed
+#    cfy local create-requirements -p cloudify-hello-world-example/blueprint.yaml
+#    if [ $? -eq 1 ]; then fail; fi
+  fi
 
   echo "vHello.sh: verify vHello server is running"
   SERVER_IP=$(cfy deployments outputs -d vHello | awk "/ Value: / { print \$2 }")

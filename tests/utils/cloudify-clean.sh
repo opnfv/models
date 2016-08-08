@@ -23,6 +23,12 @@
 #
 # How to use:
 #   $ bash cloudify-clean.sh
+#
+# Extra commands useful in debugging:
+# Delete all security groups created by Cloudify
+# sg=($(openstack security group list|awk "/ security_group_local_security_group_/ { print \$2 }")); for id in ${sg[@]}; do openstack security group delete ${id}; done
+# Delete all floating IPs
+# flip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${flip[@]}; do neutron floatingip-delete ${id}; done
 
 function setenv () {
 mkdir /tmp/cloudify
@@ -91,7 +97,7 @@ neutron port-delete cloudify-manager-port
 echo "cloudify-clean.sh: delete other ports"
 port=($(neutron port-list|grep -v "+"|grep -v name|awk '{print $2}')); for id in ${port[@]}; do neutron port-delete ${id}; done
 
-echo "cloudify-clean.sh: delete cloudify securituy groups"
+echo "cloudify-clean.sh: delete cloudify security groups"
 openstack security group delete cloudify-sg-manager 
 openstack security group delete cloudify-sg-agents 
 
@@ -113,3 +119,7 @@ openstack keypair delete cloudify-manager
 echo "cloudify-clean.sh: delete cloudify-agent keypair"
 openstack keypair delete cloudify-agent
 
+echo "cloudify-clean.sh: delete cloudify container"
+CONTAINER=$(sudo docker ps -l | awk "/ ubuntu:xenial / { print \$1 }")
+sudo docker stop $CONTAINER
+sudo docker rm -v $CONTAINER

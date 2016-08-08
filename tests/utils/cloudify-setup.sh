@@ -88,7 +88,7 @@ function get_external_net () {
 }
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
-if [ "$1" == "1" ]; then
+if [ "$2" == "1" ]; then
   echo "cloudify-setup.sh: Copy this script to /tmp/cloudify"
   cp $0 /tmp/cloudify/.
   chmod 755 /tmp/cloudify/*.sh
@@ -105,7 +105,7 @@ if [ "$1" == "1" ]; then
     exit 0
   fi
 else 
-  if [ "$1" == "2" ]; then
+  if [ "$2" == "2" ]; then
     echo "cloudify-setup.sh: Install dependencies - OS specific"
     if [ "$dist" == "Ubuntu" ]; then
       apt-get update
@@ -153,64 +153,66 @@ python get-cloudify.py --upgrade
 echo "cloudify-setup.sh: Initialize Cloudify"
 cfy init
 
-echo "cloudify-setup.sh: Prepare the Cloudify Manager data"
-mkdir -p ~/cloudify-manager
-cd ~/cloudify-manager
-wget https://github.com/cloudify-cosmo/cloudify-manager-blueprints/archive/3.4.tar.gz
-mv 3.4.tar.gz cloudify-manager-blueprints.tar.gz
-tar -xzvf cloudify-manager-blueprints.tar.gz
-cd cloudify-manager-blueprints-3.4
-
 echo "cloudify-setup.sh: Setup admin-openrc.sh"
 source /tmp/cloudify/admin-openrc.sh
 
-echo "cloudify-setup.sh: Setup keystone_username"
-sed -i -- "s/keystone_username: ''/keystone_username: '$OS_USERNAME'/g" openstack-manager-blueprint-inputs.yaml
+if [ "$1" == "cloudify-manager" ]; then
+  echo "cloudify-setup.sh: Prepare the Cloudify Manager data"
+  mkdir -p ~/cloudify-manager
+  cd ~/cloudify-manager
+  wget https://github.com/cloudify-cosmo/cloudify-manager-blueprints/archive/3.4.tar.gz
+  mv 3.4.tar.gz cloudify-manager-blueprints.tar.gz
+  tar -xzvf cloudify-manager-blueprints.tar.gz
+  cd cloudify-manager-blueprints-3.4
 
-echo "cloudify-setup.sh: Setup keystone_password"
-sed -i -- "s/keystone_password: ''/keystone_password: '$OS_PASSWORD'/g" openstack-manager-blueprint-inputs.yaml
+  echo "cloudify-setup.sh: Setup keystone_username"
+  sed -i -- "s/keystone_username: ''/keystone_username: '$OS_USERNAME'/g" openstack-manager-blueprint-inputs.yaml
 
-echo "cloudify-setup.sh: Setup keystone_tenant_name"
-sed -i -- "s/keystone_tenant_name: ''/keystone_tenant_name: '$OS_TENANT_NAME'/g" openstack-manager-blueprint-inputs.yaml
+  echo "cloudify-setup.sh: Setup keystone_password"
+  sed -i -- "s/keystone_password: ''/keystone_password: '$OS_PASSWORD'/g" openstack-manager-blueprint-inputs.yaml
 
-echo "cloudify-setup.sh: Setup keystone_url"
-# Use ~ instead of / as regex delimeter, since this variable contains slashes
-sed -i -- "s~keystone_url: ''~keystone_url: '$OS_AUTH_URL'~g" openstack-manager-blueprint-inputs.yaml
+  echo "cloudify-setup.sh: Setup keystone_tenant_name"
+  sed -i -- "s/keystone_tenant_name: ''/keystone_tenant_name: '$OS_TENANT_NAME'/g" openstack-manager-blueprint-inputs.yaml
 
-echo "cloudify-setup.sh: Setup region"
-sed -i -- "s/region: ''/region: '$OS_REGION_NAME'/g" openstack-manager-blueprint-inputs.yaml
+  echo "cloudify-setup.sh: Setup keystone_url"
+  # Use ~ instead of / as regex delimeter, since this variable contains slashes
+  sed -i -- "s~keystone_url: ''~keystone_url: '$OS_AUTH_URL'~g" openstack-manager-blueprint-inputs.yaml
 
-echo "cloudify-setup.sh: Setup manager_public_key_name"
-sed -i -- "s/#manager_public_key_name: ''/manager_public_key_name: 'cloudify-manager'/g" openstack-manager-blueprint-inputs.yaml
+  echo "cloudify-setup.sh: Setup region"
+  sed -i -- "s/region: ''/region: '$OS_REGION_NAME'/g" openstack-manager-blueprint-inputs.yaml
 
-echo "cloudify-setup.sh: Setup agent_public_key_name"
-sed -i -- "s/#agent_public_key_name: ''/agent_public_key_name: 'cloudify-agent'/g" openstack-manager-blueprint-inputs.yaml
+  echo "cloudify-setup.sh: Setup manager_public_key_name"
+  sed -i -- "s/#manager_public_key_name: ''/manager_public_key_name: 'cloudify-manager'/g" openstack-manager-blueprint-inputs.yaml
 
-echo "cloudify-setup.sh: Setup image_id"
-# CentOS-7-x86_64-GenericCloud.qcow2 failed to be routable (?), so changed to 1607 version
-image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
-if [ -z $image ]; then glance --os-image-api-version 1 image-create --name CentOS-7-x86_64-GenericCloud-1607 --disk-format qcow2 --location http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2-1607 --container-format bare
+  echo "cloudify-setup.sh: Setup agent_public_key_name"
+  sed -i -- "s/#agent_public_key_name: ''/agent_public_key_name: 'cloudify-agent'/g" openstack-manager-blueprint-inputs.yaml
+
+  echo "cloudify-setup.sh: Setup image_id"
+  # CentOS-7-x86_64-GenericCloud.qcow2 failed to be routable (?), so changed to 1607 version
+  image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
+  if [ -z $image ]; then 
+    glance --os-image-api-version 1 image-create --name CentOS-7-x86_64-GenericCloud-1607 --disk-format qcow2 --location http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2-1607 --container-format bare
+  fi
+  image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
+  sed -i -- "s/image_id: ''/image_id: '$image'/g" openstack-manager-blueprint-inputs.yaml
+
+  echo "cloudify-setup.sh: Setup flavor_id"
+  flavor=$(nova flavor-show m1.large | awk "/ id / { print \$4 }")
+  sed -i -- "s/flavor_id: ''/flavor_id: '$flavor'/g" openstack-manager-blueprint-inputs.yaml
+
+  echo "cloudify-setup.sh: Setup external_network_name"
+  get_external_net
+  sed -i -- "s/external_network_name: ''/external_network_name: '$EXTERNAL_NETWORK_NAME'/g" openstack-manager-blueprint-inputs.yaml
+
+  # By default, only the cloudify-management-router is setup as DNS server, and it was failing to resolve internet domain names, which was blocking download of needed resources
+  echo "cloudify-setup.sh: Add nameservers"
+  sed -i -- "s/#management_subnet_dns_nameservers: \[\]/management_subnet_dns_nameservers: \[8.8.8.8\]/g" openstack-manager-blueprint-inputs.yaml
+
+  echo "cloudify-setup.sh: Bootstrap the manager"
+  cfy bootstrap --install-plugins --keep-up-on-failure -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
+
+  echo "cloudify-setup.sh: install needed packages to support blueprints 'not using managed plugins'"
+  # See https://cloudifysource.atlassian.net/browse/CFY-5050
+  cfy ssh -c "sudo yum install -y gcc gcc-c++ python-devel"
 fi
-image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
-sed -i -- "s/image_id: ''/image_id: '$image'/g" openstack-manager-blueprint-inputs.yaml
-
-echo "cloudify-setup.sh: Setup flavor_id"
-flavor=$(nova flavor-show m1.large | awk "/ id / { print \$4 }")
-sed -i -- "s/flavor_id: ''/flavor_id: '$flavor'/g" openstack-manager-blueprint-inputs.yaml
-
-echo "cloudify-setup.sh: Setup external_network_name"
-get_external_net
-sed -i -- "s/external_network_name: ''/external_network_name: '$EXTERNAL_NETWORK_NAME'/g" openstack-manager-blueprint-inputs.yaml
-
-# By default, only the cloudify-management-router is setup as DNS server, and it was failing to resolve internet domain names, which was blocking download of needed resources
-echo "cloudify-setup.sh: Add nameservers"
-sed -i -- "s/#management_subnet_dns_nameservers: \[\]/management_subnet_dns_nameservers: \[8.8.8.8\]/g" openstack-manager-blueprint-inputs.yaml
-
-echo "cloudify-setup.sh: Bootstrap the manager"
-cfy bootstrap --install-plugins --keep-up-on-failure -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
-
-echo "cloudify-setup.sh: install needed packages on the manager to support blueprints 'not using managed plugins'"
-# See https://cloudifysource.atlassian.net/browse/CFY-5050
-cfy ssh -c "sudo yum install -y gcc gcc-c++ python-devel"
-
 
