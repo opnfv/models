@@ -157,7 +157,7 @@ echo "cloudify-setup.sh: Setup admin-openrc.sh"
 source /tmp/cloudify/admin-openrc.sh
 
 if [ "$1" == "cloudify-manager" ]; then
-  echo "cloudify-setup.sh: Prepare the Cloudify Manager data"
+  echo "cloudify-setup.sh: Prepare the Cloudify Manager prerequisites and data"
   mkdir -p ~/cloudify-manager
   cd ~/cloudify-manager
   wget https://github.com/cloudify-cosmo/cloudify-manager-blueprints/archive/3.4.tar.gz
@@ -214,5 +214,10 @@ if [ "$1" == "cloudify-manager" ]; then
   echo "cloudify-setup.sh: install needed packages to support blueprints 'not using managed plugins'"
   # See https://cloudifysource.atlassian.net/browse/CFY-5050
   cfy ssh -c "sudo yum install -y gcc gcc-c++ python-devel"
+else
+    echo "cloudify-setup.sh: Prepare the Cloudify CLI prerequisites and data"
+    cd ~
+    git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git
+    pip install -r requirements.txt
+    pip install .
 fi
-
