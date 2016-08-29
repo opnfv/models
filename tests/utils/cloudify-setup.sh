@@ -90,6 +90,7 @@ function get_external_net () {
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 if [ "$2" == "1" ]; then
   echo "cloudify-setup.sh: Copy this script to /tmp/cloudify"
+	mkdir /tmp/cloudify
   cp $0 /tmp/cloudify/.
   chmod 755 /tmp/cloudify/*.sh
 
@@ -102,6 +103,25 @@ if [ "$2" == "1" ]; then
     sudo service docker start
 #    sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
     sudo docker run -it -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash
+    exit 0
+	else 
+    # Centos
+    echo "Centos-based install"
+    sudo tee /etc/yum.repos.d/docker.repo <<-'EOF'
+[dockerrepo]
+name=Docker Repository
+baseurl=https://yum.dockerproject.org/repo/main/centos/7/
+enabled=1
+gpgcheck=1
+gpgkey=https://yum.dockerproject.org/gpg 
+EOF
+    sudo yum install -y docker-engine
+    # xenial is needed for python 3.5
+    sudo docker pull ubuntu:xenial
+    sudo service docker start
+#    sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
+    CID=$(sudo docker run -i -t -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash)
+#    sudo docker attach $CID
     exit 0
   fi
 else 
@@ -218,6 +238,7 @@ else
     echo "cloudify-setup.sh: Prepare the Cloudify CLI prerequisites and data"
     cd ~
     git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git
-    pip install -r requirements.txt
-    pip install .
+    cd cloudify-openstack-plugin
+    python setup.py build
+    python setup.py install
 fi
