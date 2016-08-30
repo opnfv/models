@@ -120,8 +120,7 @@ EOF
     sudo docker pull ubuntu:xenial
     sudo service docker start
 #    sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
-    CID=$(sudo docker run -i -t -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash)
-#    sudo docker attach $CID
+    sudo docker run -i -t -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash
     exit 0
   fi
 else 
@@ -237,8 +236,30 @@ if [ "$1" == "cloudify-manager" ]; then
 else
     echo "cloudify-setup.sh: Prepare the Cloudify CLI prerequisites and data"
     cd ~
-    git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git
+    git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git		
     cd cloudify-openstack-plugin
+
+    echo "Create management network"
+    if [ $(neutron net-list | awk "/ cloudify_mgmt / { print \$2 }") ]; then
+      echo "cloudify-setup.sh: cloudify_mgmt network exists"
+    else
+      neutron net-create cloudify_mgmt		
+      echo "Create management subnet"
+      neutron subnet-create cloudify_mgmt 10.0.0.0/24 --name cloudify_mgmt --gateway 10.0.0.1 --enable-dhcp --allocation-pool start=10.0.0.2,end=10.0.0.254 --dns-nameserver 8.8.8.8
+    fi
+    echo "cloudify-setup.sh: Create router for cloudify_mgmt network"
+    neutron router-create cloudify_mgmt_router
+
+    echo "cloudify-setup.sh: Create router gateway for cloudify_mgmt network"
+    neutron router-gateway-set cloudify_mgmt_router $EXTERNAL_NETWORK_NAME
+
+    echo "cloudify-setup.sh: Add router interface for cloudify_mgmt network"
+    neutron router-interface-add cloudify_mgmt_router subnet=cloudify_mgmt
+    fi
+		
+  echo "cloudify-setup.sh: Patch plugin.yaml to reference management network"
+  sed -i -- "s/management_network_name:\n        default: ''/management_network_name:\n        default: 'cloudify_mgmt'/" ~/cloudify-openstack-plugin/plugin.yaml
+    		
     python setup.py build
     python setup.py install
 fi
