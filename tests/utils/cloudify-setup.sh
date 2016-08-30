@@ -27,8 +27,8 @@
 
 function setenv () {
 if [ "$dist" == "Ubuntu" ]; then
-  echo "cloudify-setup.sh: Ubuntu-based install"
-  echo "cloudify-setup.sh: Create the environment file"
+  echo "$0: Ubuntu-based install"
+  echo "$0: Create the environment file"
   KEYSTONE_HOST=$(juju status --format=short | awk "/keystone\/0/ { print \$3 }")
   cat <<EOF >/tmp/cloudify/admin-openrc.sh
 export CONGRESS_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
@@ -47,12 +47,12 @@ export OS_REGION_NAME=RegionOne
 EOF
 else
   # Centos
-  echo "cloudify-setup.sh: Centos-based install"
-  echo "cloudify-setup.sh: Setup undercloud environment so we can get overcloud Controller server address"
+  echo "$0: Centos-based install"
+  echo "$0: Setup undercloud environment so we can get overcloud Controller server address"
   source ~/stackrc
-  echo "cloudify-setup.sh: Get address of Controller node"
+  echo "$0: Get address of Controller node"
   export CONTROLLER_HOST1=$(openstack server list | awk "/overcloud-controller-0/ { print \$8 }" | sed 's/ctlplane=//g')
-  echo "cloudify-setup.sh: Create the environment file"
+  echo "$0: Create the environment file"
   cat <<EOF >/tmp/cloudify/admin-openrc.sh
 export CONGRESS_HOST=$CONTROLLER_HOST1
 export KEYSTONE_HOST=$CONTROLLER_HOST1
@@ -82,21 +82,21 @@ function get_external_net () {
     EXTERNAL_NETWORK_NAME=$(openstack network show $ext_net_id | awk "/ name / { print \$4 }")
     EXTERNAL_SUBNET_ID=$(openstack network show $EXTERNAL_NETWORK_NAME | awk "/ subnets / { print \$4 }")
   else
-    echo "cloudify-setup.sh: External network not found"
+    echo "$0: External network not found"
     exit 1
   fi
 }
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 if [ "$2" == "1" ]; then
-  echo "cloudify-setup.sh: Copy this script to /tmp/cloudify"
+  echo "$0: Copy this script to /tmp/cloudify"
 	mkdir /tmp/cloudify
   cp $0 /tmp/cloudify/.
   chmod 755 /tmp/cloudify/*.sh
 
-  echo "cloudify-setup.sh: Setup admin-openrc.sh"
+  echo "$0: Setup admin-openrc.sh"
   setenv
-  echo "cloudify-setup.sh: Setup container"
+  echo "$0: Setup container"
   if [ "$dist" == "Ubuntu" ]; then
     # xenial is needed for python 3.5
     sudo docker pull ubuntu:xenial
@@ -125,7 +125,7 @@ EOF
   fi
 else 
   if [ "$2" == "2" ]; then
-    echo "cloudify-setup.sh: Install dependencies - OS specific"
+    echo "$0: Install dependencies - OS specific"
     if [ "$dist" == "Ubuntu" ]; then
       apt-get update
       apt-get install -y python
@@ -147,36 +147,36 @@ fi
 
 cd ~
 
-echo "cloudify-setup.sh: Install dependencies - generic"
+echo "$0: Install dependencies - generic"
 pip install --upgrade pip virtualenv
 
-echo "cloudify-setup.sh: Upgrage pip again - needs to be the latest version due to errors found in earlier testing"
+echo "$0: Upgrage pip again - needs to be the latest version due to errors found in earlier testing"
 pip install --upgrade pip
 
-echo "cloudify-setup.sh: install python-openstackclient python-glanceclient"
+echo "$0: install python-openstackclient python-glanceclient"
 pip install --upgrade python-openstackclient python-glanceclient  python-neutronclient
 
-echo "cloudify-setup.sh: cleanup any previous install attempt"
+echo "$0: cleanup any previous install attempt"
 if [ -d "~/cloudify" ]; then rm -rf ~/cloudify; fi  
 if [ -d "~/cloudify-manager" ]; then rm -rf ~/cloudify-manager; fi  
 rm ~/get-cloudify.py
 
-echo "cloudify-setup.sh: Create virtualenv"
+echo "$0: Create virtualenv"
 virtualenv ~/cloudify/venv
 source ~/cloudify/venv/bin/activate
 
-echo "cloudify-setup.sh: Get Cloudify"
+echo "$0: Get Cloudify"
 wget http://gigaspaces-repository-eu.s3.amazonaws.com/org/cloudify3/get-cloudify.py
 python get-cloudify.py --upgrade
 
-echo "cloudify-setup.sh: Initialize Cloudify"
+echo "$0: Initialize Cloudify"
 cfy init
 
-echo "cloudify-setup.sh: Setup admin-openrc.sh"
+echo "$0: Setup admin-openrc.sh"
 source /tmp/cloudify/admin-openrc.sh
 
 if [ "$1" == "cloudify-manager" ]; then
-  echo "cloudify-setup.sh: Prepare the Cloudify Manager prerequisites and data"
+  echo "$0: Prepare the Cloudify Manager prerequisites and data"
   mkdir -p ~/cloudify-manager
   cd ~/cloudify-manager
   wget https://github.com/cloudify-cosmo/cloudify-manager-blueprints/archive/3.4.tar.gz
@@ -184,29 +184,29 @@ if [ "$1" == "cloudify-manager" ]; then
   tar -xzvf cloudify-manager-blueprints.tar.gz
   cd cloudify-manager-blueprints-3.4
 
-  echo "cloudify-setup.sh: Setup keystone_username"
+  echo "$0: Setup keystone_username"
   sed -i -- "s/keystone_username: ''/keystone_username: '$OS_USERNAME'/g" openstack-manager-blueprint-inputs.yaml
 
-  echo "cloudify-setup.sh: Setup keystone_password"
+  echo "$0: Setup keystone_password"
   sed -i -- "s/keystone_password: ''/keystone_password: '$OS_PASSWORD'/g" openstack-manager-blueprint-inputs.yaml
 
-  echo "cloudify-setup.sh: Setup keystone_tenant_name"
+  echo "$0: Setup keystone_tenant_name"
   sed -i -- "s/keystone_tenant_name: ''/keystone_tenant_name: '$OS_TENANT_NAME'/g" openstack-manager-blueprint-inputs.yaml
 
-  echo "cloudify-setup.sh: Setup keystone_url"
+  echo "$0: Setup keystone_url"
   # Use ~ instead of / as regex delimeter, since this variable contains slashes
   sed -i -- "s~keystone_url: ''~keystone_url: '$OS_AUTH_URL'~g" openstack-manager-blueprint-inputs.yaml
 
-  echo "cloudify-setup.sh: Setup region"
+  echo "$0: Setup region"
   sed -i -- "s/region: ''/region: '$OS_REGION_NAME'/g" openstack-manager-blueprint-inputs.yaml
 
-  echo "cloudify-setup.sh: Setup manager_public_key_name"
+  echo "$0: Setup manager_public_key_name"
   sed -i -- "s/#manager_public_key_name: ''/manager_public_key_name: 'cloudify-manager'/g" openstack-manager-blueprint-inputs.yaml
 
-  echo "cloudify-setup.sh: Setup agent_public_key_name"
+  echo "$0: Setup agent_public_key_name"
   sed -i -- "s/#agent_public_key_name: ''/agent_public_key_name: 'cloudify-agent'/g" openstack-manager-blueprint-inputs.yaml
 
-  echo "cloudify-setup.sh: Setup image_id"
+  echo "$0: Setup image_id"
   # CentOS-7-x86_64-GenericCloud.qcow2 failed to be routable (?), so changed to 1607 version
   image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
   if [ -z $image ]; then 
@@ -215,51 +215,51 @@ if [ "$1" == "cloudify-manager" ]; then
   image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
   sed -i -- "s/image_id: ''/image_id: '$image'/g" openstack-manager-blueprint-inputs.yaml
 
-  echo "cloudify-setup.sh: Setup flavor_id"
+  echo "$0: Setup flavor_id"
   flavor=$(nova flavor-show m1.large | awk "/ id / { print \$4 }")
   sed -i -- "s/flavor_id: ''/flavor_id: '$flavor'/g" openstack-manager-blueprint-inputs.yaml
 
-  echo "cloudify-setup.sh: Setup external_network_name"
+  echo "$0: Setup external_network_name"
   get_external_net
   sed -i -- "s/external_network_name: ''/external_network_name: '$EXTERNAL_NETWORK_NAME'/g" openstack-manager-blueprint-inputs.yaml
 
   # By default, only the cloudify-management-router is setup as DNS server, and it was failing to resolve internet domain names, which was blocking download of needed resources
-  echo "cloudify-setup.sh: Add nameservers"
+  echo "$0: Add nameservers"
   sed -i -- "s/#management_subnet_dns_nameservers: \[\]/management_subnet_dns_nameservers: \[8.8.8.8\]/g" openstack-manager-blueprint-inputs.yaml
 
-  echo "cloudify-setup.sh: Bootstrap the manager"
+  echo "$0: Bootstrap the manager"
   cfy bootstrap --install-plugins --keep-up-on-failure --task-retries=10 -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
 
-  echo "cloudify-setup.sh: install needed packages to support blueprints 'not using managed plugins'"
+  echo "$0: install needed packages to support blueprints 'not using managed plugins'"
   # See https://cloudifysource.atlassian.net/browse/CFY-5050
   cfy ssh -c "sudo yum install -y gcc gcc-c++ python-devel"
 else
-    echo "cloudify-setup.sh: Prepare the Cloudify CLI prerequisites and data"
-    cd ~
-    git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git		
-    cd cloudify-openstack-plugin
+  echo "$0: Prepare the Cloudify CLI prerequisites and data"
+  cd /tmp/cloudify
+  git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git		
+  cd cloudify-openstack-plugin
 
-    echo "Create management network"
-    if [ $(neutron net-list | awk "/ cloudify_mgmt / { print \$2 }") ]; then
-      echo "cloudify-setup.sh: cloudify_mgmt network exists"
-    else
-      neutron net-create cloudify_mgmt		
-      echo "Create management subnet"
-      neutron subnet-create cloudify_mgmt 10.0.0.0/24 --name cloudify_mgmt --gateway 10.0.0.1 --enable-dhcp --allocation-pool start=10.0.0.2,end=10.0.0.254 --dns-nameserver 8.8.8.8
-    fi
-    echo "cloudify-setup.sh: Create router for cloudify_mgmt network"
-    neutron router-create cloudify_mgmt_router
+  echo "Create management network"
+  if [ $(neutron net-list | awk "/ cloudify_mgmt / { print \$2 }") ]; then
+    echo "$0: cloudify_mgmt network exists"
+  else
+    neutron net-create cloudify_mgmt		
+    echo "$0: Create management subnet"
+    neutron subnet-create cloudify_mgmt 10.0.0.0/24 --name cloudify_mgmt --gateway 10.0.0.1 --enable-dhcp --allocation-pool start=10.0.0.2,end=10.0.0.254 --dns-nameserver 8.8.8.8
+  fi
 
-    echo "cloudify-setup.sh: Create router gateway for cloudify_mgmt network"
-    neutron router-gateway-set cloudify_mgmt_router $EXTERNAL_NETWORK_NAME
+  echo "$0: Create router for cloudify_mgmt network"
+  neutron router-create cloudify_mgmt_router
 
-    echo "cloudify-setup.sh: Add router interface for cloudify_mgmt network"
-    neutron router-interface-add cloudify_mgmt_router subnet=cloudify_mgmt
-    fi
+  echo "$0: Create router gateway for cloudify_mgmt network"
+  neutron router-gateway-set cloudify_mgmt_router $EXTERNAL_NETWORK_NAME
+
+  echo "$0: Add router interface for cloudify_mgmt network"
+  neutron router-interface-add cloudify_mgmt_router subnet=cloudify_mgmt
 		
-  echo "cloudify-setup.sh: Patch plugin.yaml to reference management network"
-  sed -i -- "s/management_network_name:\n        default: ''/management_network_name:\n        default: 'cloudify_mgmt'/" ~/cloudify-openstack-plugin/plugin.yaml
+  echo "$0: Patch plugin.yaml to reference management network"
+  sed -i -- "s/management_network_name:\n        default: ''/management_network_name:\n        default: 'cloudify_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml
     		
-    python setup.py build
-    python setup.py install
+  python setup.py build
+  python setup.py install
 fi
