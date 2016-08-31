@@ -90,7 +90,7 @@ function get_external_net () {
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 if [ "$2" == "1" ]; then
   echo "$0: Copy this script to /tmp/cloudify"
-	mkdir /tmp/cloudify
+  mkdir /tmp/cloudify
   cp $0 /tmp/cloudify/.
   chmod 755 /tmp/cloudify/*.sh
 
