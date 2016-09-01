@@ -69,9 +69,15 @@ start() {
   cd /tmp/cloudify/blueprints
 
   echo "$0: clone cloudify-hello-world-example"
-  git clone https://github.com/cloudify-cosmo/cloudify-hello-world-example.git
-  cd cloudify-hello-world-example
-  git checkout 3.4.1-build
+  if [[ "$1" == "cloudify-manager" ]]; then 
+    git clone https://github.com/cloudify-cosmo/cloudify-hello-world-example.git
+    cd cloudify-hello-world-example
+    git checkout 3.4.1-build
+  else
+    git clone https://github.com/blsaws/cloudify-cli-hello-world-example.git
+    cd cloudify-cli-hello-world-example
+    git checkout 3.4.1-build
+  fi
 
   echo "$0: setup OpenStack CLI environment"
   source /tmp/cloudify/admin-openrc.sh
@@ -114,6 +120,9 @@ flavor: m1.small
 external_network_name: $floating_network_name
 webserver_port: 8080
 key_name: vHello
+ssh_key_filename: ~/.ssh/vHello.pem
+ssh_user: ubuntu
+ssh_port: 22
 EOF
   fi
 
@@ -143,14 +152,8 @@ EOF
     SERVER_URL=$(cfy deployments outputs -d vHello | awk "/ Value: / { print \$2 }")
   else 
     echo "$0: install local blueprint"
-    cfy local install --install-plugins -i vHello-inputs.yaml -p cloudify-hello-world-example/blueprint.yaml --allow-custom-parameters --parameters="floating_network_name=$floating_network_name" --task-retries=10 --task-retry-interval=30
+    cfy local install --install-plugins -i vHello-inputs.yaml -p cloudify-cli-hello-world-example/blueprint.yaml --allow-custom-parameters --parameters="floating_network_name=$floating_network_name" --task-retries=10 --task-retry-interval=30
     if [ $? -eq 1 ]; then fail; fi
-#    cfy local install replaces the following, per http://getcloudify.org/2016/04/07/cloudify-update-from-developers-features-improvements-open-source-python-devops.html
-#    cfy local init --install-plugins -i vHello-inputs.yaml -p cloudify-hello-world-example/blueprint.yaml 
-#    cfy local execute -w install
-#    Not sure if needed
-#    cfy local create-requirements -p cloudify-hello-world-example/blueprint.yaml
-#    if [ $? -eq 1 ]; then fail; fi
 
     echo "$0: get vHello server address"
     SERVER_URL=$(cfy local outputs | awk "/http_endpoint/ { print \$2 }" | sed -- 's/"//g')

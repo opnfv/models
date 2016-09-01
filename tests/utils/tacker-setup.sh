@@ -165,7 +165,7 @@ echo "$0: Upgrage pip again - needs to be the latest version due to errors found
 pip install --upgrade
 
 echo "$0: install python-openstackclient python-glanceclient"
-pip install --upgrade python-openstackclient python-glanceclient python-neutronclient
+pip install --upgrade python-openstackclient python-glanceclient python-neutronclient keystonemiddleware
 
 echo "$0: Create virtualenv"
 virtualenv /tmp/tacker/venv
@@ -223,9 +223,10 @@ sed -i -- "s~auth_uri = http://<KEYSTONE_IP>:5000~auth_uri = http://$KEYSTONE_HO
 sed -i -- "s~# connection = mysql://root:pass@127.0.0.1:3306/tacker~connection = mysql://root:$MYSQL_PASSWORD@$ip:3306/tacker?charset=utf8~" /usr/local/etc/tacker/tacker.conf
 sed -i -- ":a;N;$!ba;s~password = service-password\nusername = nova\nauth_url = http://127.0.0.1:35357~password = $OS_PASSWORD\nauth_url = http://$NOVA_HOST:35357~g" /usr/local/etc/tacker/tacker.conf
 sed -i -- "s~heat_uri = http://localhost:8004/v1~heat_uri = http://$HEAT_HOST:8004/v1~" /usr/local/etc/tacker/tacker.conf
+sed -i -- "s~# api_paste_config = api-paste.ini~api_paste_config = /tmp/tacker/tacker/etc/tacker/api-paste.ini~" /usr/local/etc/tacker/tacker.conf
 
 echo "$0: Populate Tacker database"
-/usr/local/bin/tacker-db-manage --config-file /etc/tacker/tacker.conf upgrade head
+/tmp/tacker/venv/bin/tacker-db-manage --config-file /etc/tacker/tacker.conf upgrade head
 
 echo "$0: Install Tacker Client"
 cd /tmp/tacker
@@ -246,6 +247,6 @@ python setup.py install
 #service apache2 restart
 
 echo "$0: Start the Tacker Server"
-python /usr/local/bin/tacker-server --config-file /usr/local/etc/tacker/tacker.conf --log-file /var/log/tacker/tacker.log
+python /tmp/tacker/venv/bin/tacker-server --config-file /usr/local/etc/tacker/tacker.conf --log-file /var/log/tacker/tacker.log
 
 # Registering default VIM: deferrred
