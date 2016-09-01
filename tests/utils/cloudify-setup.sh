@@ -235,9 +235,10 @@ if [ "$1" == "cloudify-manager" ]; then
   cfy ssh -c "sudo yum install -y gcc gcc-c++ python-devel"
 else
   echo "$0: Prepare the Cloudify CLI prerequisites and data"
+
+  echo "$0: Install Cloudify OpenStack Plugin"
   cd /tmp/cloudify
-  git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git		
-  cd cloudify-openstack-plugin
+  git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git
 
   echo "Create management network"
   if [ $(neutron net-list | awk "/ cloudify_mgmt / { print \$2 }") ]; then
@@ -258,8 +259,24 @@ else
   neutron router-interface-add cloudify_mgmt_router subnet=cloudify_mgmt
 		
   echo "$0: Patch plugin.yaml to reference management network"
-  sed -i -- "s/management_network_name:\n        default: ''/management_network_name:\n        default: 'cloudify_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml
+  sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'cloudify_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml
     		
+  cd cloudify-openstack-plugin
   python setup.py build
   python setup.py install
+  cd ..
+
+  echo "$0: Install Cloudify Fabric (SSH) Plugin"
+  git clone https://github.com/cloudify-cosmo/cloudify-fabric-plugin.git
+  cd cloudify-fabric-plugin
+  python setup.py build
+  python setup.py install
+  cd ..
+
+  echo "$0: Install Cloudify Diamond Plugin"
+  git clone https://github.com/cloudify-cosmo/cloudify-diamond-plugin.git
+  cd cloudify-diamond-plugin
+  python setup.py build
+  python setup.py install
+  cd ..
 fi

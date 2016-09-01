@@ -154,8 +154,8 @@ EOF
     SERVER_URL=$(cfy deployments outputs -d vHello | awk "/ Value: / { print \$2 }")
   else 
     echo "$0: install local blueprint"
-#    cfy local install --install-plugins -i vHello-inputs.yaml -p cloudify-cli-hello-world-example/blueprint.yaml --allow-custom-parameters --parameters="floating_network_name=$floating_network_name" --task-retries=10 --task-retry-interval=30
-     cfy local install -i vHello-inputs.yaml -p cloudify-cli-hello-world-example/blueprint.yaml --allow-custom-parameters --parameters="floating_network_name=$floating_network_name" --task-retries=10 --task-retry-interval=30
+    # don't use --install-plugins, causes openstack plugin 1.4.1 to be rolled back to 1.4 and then an error
+    cfy local install -i vHello-inputs.yaml -p cloudify-cli-hello-world-example/blueprint.yaml --allow-custom-parameters --parameters="floating_network_name=$floating_network_name" --task-retries=10 --task-retry-interval=30
    if [ $? -eq 1 ]; then fail; fi
 
     echo "$0: get vHello server address"
