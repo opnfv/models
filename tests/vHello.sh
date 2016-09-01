@@ -79,6 +79,8 @@ start() {
     git checkout 3.4.1-build
   fi
 
+  cd /tmp/cloudify/blueprints
+
   echo "$0: setup OpenStack CLI environment"
   source /tmp/cloudify/admin-openrc.sh
 
@@ -120,7 +122,7 @@ flavor: m1.small
 external_network_name: $floating_network_name
 webserver_port: 8080
 key_name: vHello
-ssh_key_filename: ~/.ssh/vHello.pem
+ssh_key_filename: /root/.ssh/vHello.pem
 ssh_user: ubuntu
 ssh_port: 22
 EOF
@@ -152,8 +154,9 @@ EOF
     SERVER_URL=$(cfy deployments outputs -d vHello | awk "/ Value: / { print \$2 }")
   else 
     echo "$0: install local blueprint"
-    cfy local install --install-plugins -i vHello-inputs.yaml -p cloudify-cli-hello-world-example/blueprint.yaml --allow-custom-parameters --parameters="floating_network_name=$floating_network_name" --task-retries=10 --task-retry-interval=30
-    if [ $? -eq 1 ]; then fail; fi
+#    cfy local install --install-plugins -i vHello-inputs.yaml -p cloudify-cli-hello-world-example/blueprint.yaml --allow-custom-parameters --parameters="floating_network_name=$floating_network_name" --task-retries=10 --task-retry-interval=30
+     cfy local install -i vHello-inputs.yaml -p cloudify-cli-hello-world-example/blueprint.yaml --allow-custom-parameters --parameters="floating_network_name=$floating_network_name" --task-retries=10 --task-retry-interval=30
+   if [ $? -eq 1 ]; then fail; fi
 
     echo "$0: get vHello server address"
     SERVER_URL=$(cfy local outputs | awk "/http_endpoint/ { print \$2 }" | sed -- 's/"//g')
