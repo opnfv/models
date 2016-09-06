@@ -19,11 +19,12 @@
 # Status: this is a work in progress, under test.
 #
 # How to use:
-#   $ bash cloudify-setup.sh [cloudify-cli|cloudify-manager] [ 1 || 2 ]
+#   $ bash cloudify-setup.sh [cloudify-cli|cloudify-manager] [init|setup|clean]
 #   cloudify-cli: use Cloudify CLI
 #   cloudify-manager: use Cloudify Manager
-#   1: Initial setup of the docker container
-#   2: Setup of the Cloudify Manager in the docker container
+#   init: Initialize docker container
+#   setup: Setup of Cloudify in the docker container
+#   clean: Clean
 
 function setenv () {
 if [ "$dist" == "Ubuntu" ]; then
@@ -88,26 +89,28 @@ function get_external_net () {
 }
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
-if [ "$2" == "1" ]; then
-  echo "$0: Copy this script to /tmp/cloudify"
-  mkdir /tmp/cloudify
-  cp $0 /tmp/cloudify/.
-  chmod 755 /tmp/cloudify/*.sh
+case "$2" in
+  "init")
+    # STEP 1: Create the container and launch it
+    echo "$0: Copy this script to /tmp/cloudify"
+    mkdir /tmp/cloudify
+    cp $0 /tmp/cloudify/.
+    chmod 755 /tmp/cloudify/*.sh
 
-  echo "$0: Setup admin-openrc.sh"
-  setenv
-  echo "$0: Setup container"
-  if [ "$dist" == "Ubuntu" ]; then
-    # xenial is needed for python 3.5
-    sudo docker pull ubuntu:xenial
-    sudo service docker start
-#    sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
-    sudo docker run -it -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash
-    exit 0
-	else 
-    # Centos
-    echo "Centos-based install"
-    sudo tee /etc/yum.repos.d/docker.repo <<-'EOF'
+    echo "$0: Setup admin-openrc.sh"
+    setenv
+    echo "$0: Setup container"
+    if [ "$dist" == "Ubuntu" ]; then
+      # xenial is needed for python 3.5
+      sudo docker pull ubuntu:xenial
+      sudo service docker start
+#      sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
+      sudo docker run -it -d -v /tmp/cloudify/:/tmp/cloudify --name cloudify ubuntu:xenial /bin/bash
+      exit 0
+    else 
+      # Centos
+      echo "Centos-based install"
+      sudo tee /etc/yum.repos.d/docker.repo <<-'EOF'
 [dockerrepo]
 name=Docker Repository
 baseurl=https://yum.dockerproject.org/repo/main/centos/7/
@@ -115,55 +118,65 @@ enabled=1
 gpgcheck=1
 gpgkey=https://yum.dockerproject.org/gpg 
 EOF
-    sudo yum install -y docker-engine
-    # xenial is needed for python 3.5
-    sudo docker pull ubuntu:xenial
-    sudo service docker start
-#    sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
-    sudo docker run -i -t -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash
-    exit 0
-  fi
-else 
-  if [ "$2" == "2" ]; then
-    echo "$0: Install dependencies - OS specific"
-    if [ "$dist" == "Ubuntu" ]; then
-      apt-get update
-      apt-get install -y python
-      apt-get install -y python-dev
-      apt-get install -y python-pip
-      apt-get install -y wget
-      apt-get install -y openssh-server
-      apt-get install -y git
-#    apt-get install -y apg git gcc python-dev libxml2 libxslt1-dev libzip-dev 
-#    pip install --upgrade pip virtualenv setuptools pbr tox
+      sudo yum install -y docker-engine
+      # xenial is needed for python 3.5
+      sudo docker pull ubuntu:xenial
+      sudo service docker start
+#      sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
+      sudo docker run -i -t -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash
     fi
-  else 
-    echo "usage: bash cloudify-setup.sh [ 1 || 2 ]"
-    echo "1: Initial setup of the docker container"
-    echo "2: Setup of the Cloudify Manager in the docker container"
+    exit 0
+    ;;
+  "setup")
+    ;;
+  "clean")
+    source /tmp/cloudify/admin-openrc.sh
+    
+    id=($(neutron port-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${id[@]}; do neutron port-delete ${id};  done
+    fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
+    sid=($(openstack server list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${sid[@]}; do openstack server delete ${id};  done
+    sid=($(openstack security group list|grep security_group_local_security_group|awk '{print $2}')); for id in ${sid[@]}; do openstack security group delete ${id};  done
+    sid=($(openstack router list|grep cloudify_mgmt_router|awk '{print $2}')); for id in ${sid[@]}; do openstack router delete ${id};  done
+    sudo docker stop $(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
+    sudo docker rm $(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
+    exit 0
+    ;;
+  *)
+    echo "usage: $ bash cloudify-setup.sh [cloudify-cli|cloudify-manager] [init|setup|clean]"
+    echo "cloudify-cli: use Cloudify CLI"
+    echo "cloudify-manager: use Cloudify Manager"
+    echo "init: Initialize docker container"
+    echo "setup: Setup of Cloudify in the docker container"
+    echo "clean: Clean"
     exit 1
-  fi
+esac
+
+echo "$0: Install dependencies - OS specific"
+if [ "$dist" == "Ubuntu" ]; then
+  apt-get update
+  apt-get install -y python
+  apt-get install -y python-dev
+  apt-get install -y python-pip
+  apt-get install -y wget
+  apt-get install -y openssh-server
+  apt-get install -y git
+#  apt-get install -y apg git gcc python-dev libxml2 libxslt1-dev libzip-dev 
+#  pip install --upgrade pip virtualenv setuptools pbr tox
 fi
 
 cd ~
 
 echo "$0: Install dependencies - generic"
-pip install --upgrade pip virtualenv
-
-echo "$0: Upgrage pip again - needs to be the latest version due to errors found in earlier testing"
-pip install --upgrade pip
+pip install --upgrade pip setuptools
 
 echo "$0: install python-openstackclient python-glanceclient"
 pip install --upgrade python-openstackclient python-glanceclient  python-neutronclient
+pip install --upgrade python-neutronclient
 
 echo "$0: cleanup any previous install attempt"
 if [ -d "~/cloudify" ]; then rm -rf ~/cloudify; fi  
 if [ -d "~/cloudify-manager" ]; then rm -rf ~/cloudify-manager; fi  
 rm ~/get-cloudify.py
-
-echo "$0: Create virtualenv"
-virtualenv ~/cloudify/venv
-source ~/cloudify/venv/bin/activate
 
 echo "$0: Get Cloudify"
 wget http://gigaspaces-repository-eu.s3.amazonaws.com/org/cloudify3/get-cloudify.py
@@ -174,6 +187,8 @@ cfy init
 
 echo "$0: Setup admin-openrc.sh"
 source /tmp/cloudify/admin-openrc.sh
+
+get_external_net
 
 if [ "$1" == "cloudify-manager" ]; then
   echo "$0: Prepare the Cloudify Manager prerequisites and data"
@@ -220,7 +235,6 @@ if [ "$1" == "cloudify-manager" ]; then
   sed -i -- "s/flavor_id: ''/flavor_id: '$flavor'/g" openstack-manager-blueprint-inputs.yaml
 
   echo "$0: Setup external_network_name"
-  get_external_net
   sed -i -- "s/external_network_name: ''/external_network_name: '$EXTERNAL_NETWORK_NAME'/g" openstack-manager-blueprint-inputs.yaml
 
   # By default, only the cloudify-management-router is setup as DNS server, and it was failing to resolve internet domain names, which was blocking download of needed resources
@@ -235,10 +249,6 @@ if [ "$1" == "cloudify-manager" ]; then
   cfy ssh -c "sudo yum install -y gcc gcc-c++ python-devel"
 else
   echo "$0: Prepare the Cloudify CLI prerequisites and data"
-
-  echo "$0: Install Cloudify OpenStack Plugin"
-  cd /tmp/cloudify
-  git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git
 
   echo "Create management network"
   if [ $(neutron net-list | awk "/ cloudify_mgmt / { print \$2 }") ]; then
@@ -258,24 +268,23 @@ else
   echo "$0: Add router interface for cloudify_mgmt network"
   neutron router-interface-add cloudify_mgmt_router subnet=cloudify_mgmt
 		
+  echo "$0: Install Cloudify OpenStack Plugin"
+#  pip install https://github.com/cloudify-cosmo/cloudify-openstack-plugin/archive/1.4.zip
+  cd /tmp/cloudify
+  if [ -d "cloudify-openstack-plugin" ]; then rm -rf cloudify-openstack-plugin; fi  
+  git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git
+  git checkout 1.4
   echo "$0: Patch plugin.yaml to reference management network"
-  sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'cloudify_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml
-    		
+  sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'cloudify_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml  		
   cd cloudify-openstack-plugin
   python setup.py build
   python setup.py install
-  cd ..
 
   echo "$0: Install Cloudify Fabric (SSH) Plugin"
+  cd /tmp/cloudify
+  if [ -d "cloudify-fabric-plugin" ]; then rm -rf cloudify-fabric-plugin; fi  
   git clone https://github.com/cloudify-cosmo/cloudify-fabric-plugin.git
   cd cloudify-fabric-plugin
-  python setup.py build
-  python setup.py install
-  cd ..
-
-  echo "$0: Install Cloudify Diamond Plugin"
-  git clone https://github.com/cloudify-cosmo/cloudify-diamond-plugin.git
-  cd cloudify-diamond-plugin
   python setup.py build
   python setup.py install
   cd ..

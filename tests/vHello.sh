@@ -76,7 +76,6 @@ start() {
   else
     git clone https://github.com/blsaws/cloudify-cli-hello-world-example.git
     cd cloudify-cli-hello-world-example
-    git checkout 3.4.1-build
   fi
 
   cd /tmp/cloudify/blueprints
@@ -127,9 +126,6 @@ ssh_user: ubuntu
 ssh_port: 22
 EOF
   fi
-
-  echo "$0: activate cloudify Virtualenv"
-  source ~/cloudify/venv/bin/activate
 
   echo "$0: initialize cloudify environment"
   cd /tmp/cloudify/blueprints
@@ -204,11 +200,11 @@ if [[ "$2" == "setup" ]]; then
   chmod 755 /tmp/cloudify/*.sh
 
   echo "$0: cloudify-setup part 1"
-  bash utils/cloudify-setup.sh $1 1
+  bash utils/cloudify-setup.sh $1 init
 
   echo "$0: cloudify-setup part 2"
-  CONTAINER=$(sudo docker ps -l | awk "/ ubuntu:xenial / { print \$1 }")
-  sudo docker exec $CONTAINER /tmp/cloudify/cloudify-setup.sh $1 2
+  CONTAINER=$(sudo docker ps -l | awk "/cloudify/ { print \$1 }")
+  sudo docker exec $CONTAINER /tmp/cloudify/cloudify-setup.sh $1 setup
   if [ $? -eq 1 ]; then fail; fi
   pass
 else
@@ -218,7 +214,7 @@ else
     if [[ "$3" == "clean" ]]; then clean $1; fi    
   else
     echo "$0: pass $2 command to vHello.sh in cloudify container"
-    CONTAINER=$(sudo docker ps -l | awk "/ ubuntu:xenial / { print \$1 }")
+    CONTAINER=$(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
     sudo docker exec $CONTAINER /tmp/cloudify/vHello.sh $1 $2 $2
     if [ $? -eq 1 ]; then fail; fi
     pass
