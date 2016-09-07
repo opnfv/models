@@ -131,14 +131,13 @@ EOF
     ;;
   "clean")
     source /tmp/cloudify/admin-openrc.sh
-    
-    id=($(neutron port-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${id[@]}; do neutron port-delete ${id};  done
-    fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
-    sid=($(openstack server list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${sid[@]}; do openstack server delete ${id};  done
-    sid=($(openstack security group list|grep security_group_local_security_group|awk '{print $2}')); for id in ${sid[@]}; do openstack security group delete ${id};  done
-    sid=($(openstack router list|grep cloudify_mgmt_router|awk '{print $2}')); for id in ${sid[@]}; do openstack router delete ${id};  done
+    openstack router show vnf_mgmt_router
+    neutron router-gateway-clear vnf_mgmt_router
+    pid=($(neutron router-port-list vnf_mgmt_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_mgmt_router vnf_mgmt;  done
+    neutron router-delete vnf_mgmt_router
+    neutron net-delete vnf_mgmt
     sudo docker stop $(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
-    sudo docker rm $(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
+    sudo docker rm -v $(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
     exit 0
     ;;
   *)
@@ -251,22 +250,22 @@ else
   echo "$0: Prepare the Cloudify CLI prerequisites and data"
 
   echo "Create management network"
-  if [ $(neutron net-list | awk "/ cloudify_mgmt / { print \$2 }") ]; then
-    echo "$0: cloudify_mgmt network exists"
+  if [ $(neutron net-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
+    echo "$0: vnf_mgmt network exists"
   else
-    neutron net-create cloudify_mgmt		
+    neutron net-create vnf_mgmt		
     echo "$0: Create management subnet"
-    neutron subnet-create cloudify_mgmt 10.0.0.0/24 --name cloudify_mgmt --gateway 10.0.0.1 --enable-dhcp --allocation-pool start=10.0.0.2,end=10.0.0.254 --dns-nameserver 8.8.8.8
+    neutron subnet-create vnf_mgmt 10.0.0.0/24 --name vnf_mgmt --gateway 10.0.0.1 --enable-dhcp --allocation-pool start=10.0.0.2,end=10.0.0.254 --dns-nameserver 8.8.8.8
   fi
 
-  echo "$0: Create router for cloudify_mgmt network"
-  neutron router-create cloudify_mgmt_router
+  echo "$0: Create router for vnf_mgmt network"
+  neutron router-create vnf_mgmt_router
 
-  echo "$0: Create router gateway for cloudify_mgmt network"
-  neutron router-gateway-set cloudify_mgmt_router $EXTERNAL_NETWORK_NAME
+  echo "$0: Create router gateway for vnf_mgmt network"
+  neutron router-gateway-set vnf_mgmt_router $EXTERNAL_NETWORK_NAME
 
-  echo "$0: Add router interface for cloudify_mgmt network"
-  neutron router-interface-add cloudify_mgmt_router subnet=cloudify_mgmt
+  echo "$0: Add router interface for vnf_mgmt network"
+  neutron router-interface-add vnf_mgmt_router subnet=vnf_mgmt
 		
   echo "$0: Install Cloudify OpenStack Plugin"
 #  pip install https://github.com/cloudify-cosmo/cloudify-openstack-plugin/archive/1.4.zip
@@ -275,7 +274,7 @@ else
   git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git
   git checkout 1.4
   echo "$0: Patch plugin.yaml to reference management network"
-  sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'cloudify_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml  		
+  sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'vnf_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml  		
   cd cloudify-openstack-plugin
   python setup.py build
   python setup.py install
@@ -285,6 +284,7 @@ else
   if [ -d "cloudify-fabric-plugin" ]; then rm -rf cloudify-fabric-plugin; fi  
   git clone https://github.com/cloudify-cosmo/cloudify-fabric-plugin.git
   cd cloudify-fabric-plugin
+  git checkout 1.4
   python setup.py build
   python setup.py install
   cd ..
