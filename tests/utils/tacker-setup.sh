@@ -335,6 +335,9 @@ case "$2" in
     openstack endpoint delete $(openstack endpoint list | awk "/tacker/ { print \$2 }")
     openstack user delete $(openstack user list | awk "/tacker/ { print \$2 }")
     openstack service delete $(openstack service list | awk "/tacker/ { print \$2 }")
+    pid=($(neutron port-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${pid[@]}; do neutron port-delete ${id};  done
+    sid=($(openstack stack list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${sid[@]}; do openstack stack delete ${id};  done
+    sid=($(openstack security group list|grep security_group_local_security_group|awk '{print $2}')); for id in ${sid[@]}; do openstack security group delete ${id};  done
     neutron router-gateway-clear vnf_mgmt_router
     pid=($(neutron router-port-list vnf_mgmt_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_mgmt_router vnf_mgmt;  done
     neutron router-delete vnf_mgmt_router

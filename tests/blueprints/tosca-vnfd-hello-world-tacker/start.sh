@@ -21,12 +21,7 @@
 # How to use:
 #   $ bash start.sh
 
-set -e
-
-sudo apt-get update
-sudo apt-get install -y python3
-
-cat <<EOF >index.html
+cat << EOM | sudo tee /home/ubuntu/index.html
 <!DOCTYPE html>
 <html>
 <head>
@@ -38,10 +33,8 @@ body { width: 100%; background-color: white; color: black; padding: 0px; margin:
 </head>
 <body>
 Hello World!<br>
-<a href="http://wiki.opnfv.org"><img src="logo.png"></a>
+<a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
 </body></html>
-EOF
-
-wget https://www.opnfv.org/sites/all/themes/opnfv/logo.png
+EOM
 
 nohup sudo python3 -m http.server 80 > /dev/null 2>&1 &

@@ -29,6 +29,8 @@
 
 set -x
 
+trap 'fail' ERR
+
 pass() {
   echo "Hooray!"
   set +x #echo off
@@ -108,7 +110,7 @@ start() {
   SERVER_URL="http://$SERVER_IP"
 
   echo "$0: start vHello web server"
-  chown root ~/.ssh/vHello.pem
+  chown root /tmp/tacker/vHello.pem
   ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$SERVER_IP <<EOF
 cat << EOM | sudo tee /home/ubuntu/index.html
 <!DOCTYPE html>
@@ -172,18 +174,17 @@ if [[ "$2" == "setup" ]]; then
   echo "$0: copy tosca-vnfd-hello-world-tacker to blueprints folder"
   cp -r blueprints/tosca-vnfd-hello-world-tacker /tmp/tacker/blueprints
 
-  echo "$0: Create Nova key pair"
-  cd ~
-  mkdir -p ~/.ssh
-  nova keypair-delete vHello
-  nova keypair-add vHello > ~/.ssh/vHello.pem
-  chmod 600 ~/.ssh/vHello.pem
-  cp ~/.ssh/vHello.pem /tmp/tacker
-  pubkey=$(nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g')
-  nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g' >~/.ssh/vHello.pub
-  cp ~/.ssh/vHello.pub /tmp/tacker
+# Following two steps are in testing still. The guestfish step needs work.
 
-#  echo "$0: Inject key into xenial server image"
+#  echo "$0: Create Nova key pair"
+#  mkdir -p ~/.ssh
+#  nova keypair-delete vHello
+#  nova keypair-add vHello > /tmp/tacker/vHello.pem
+#  chmod 600 /tmp/tacker/vHello.pem
+#  pubkey=$(nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g')
+#  nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g' >/tmp/tacker/vHello.pub
+
+  echo "$0: Inject key into xenial server image"
 #  wget http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
 #  sudo yum install -y libguestfs-tools
 #  guestfish <<EOF
@@ -199,8 +200,11 @@ if [[ "$2" == "setup" ]]; then
 #chown -R ubuntu /home/ubuntu
 #EOF
 
-  echo "$0: Setup image_id"
+  # Using pre-key-injected image for now, vHello.pem as provided in the blueprint
   wget http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img
+  cp blueprints/tosca-vnfd-hello-world-tacker/vHello.pem /tmp/tacker
+
+  echo "$0: Setup image_id"
   image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
   if [ -z $image_id ]; then glance image-delete $image_id; fi 
   glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file xenial-server-cloudimg-amd64-disk1.img --container-format bare
