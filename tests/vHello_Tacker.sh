@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# What this is: Deployment test for the Tacker Hello World blueprint. 
+# What this is: Deployment test for the Tacker Hello World blueprint.
 #
 # Status: this is a work in progress, under test.
 #
@@ -48,7 +48,7 @@ function get_floating_net () {
   for id in ${network_ids[@]}; do
       [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && floating_network_id=${id}
   done
-  if [[ $floating_network_id ]]; then 
+  if [[ $floating_network_id ]]; then
     floating_network_name=$(openstack network show $floating_network_id | awk "/ name / { print \$4 }")
   else
     echo "$0: Floating network not found"
@@ -57,48 +57,36 @@ function get_floating_net () {
 }
 
 start() {
-  echo "$0: reset blueprints folder"
-  if [[ -d /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then rm -rf /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker; fi
-  mkdir -p /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker
-
-  echo "$0: copy tosca-vnfd-hello-world-tacker to blueprints folder"
-  cp -r blueprints/tosca-vnfd-hello-world-tacker /tmp/tacker/blueprints
-  cd /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker
-
   echo "$0: setup OpenStack CLI environment"
   source /tmp/tacker/admin-openrc.sh
 
-  echo "$0: Setup image_id"
-  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
-  if [ $image ]; then glance image-delete $image_id; fi
-  glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --location http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img --container-format bare
-  
-  if [[ "$1" == "tacker-api" ]]; then 
+  if [[ "$1" == "tacker-api" ]]; then
     echo "$0: Tacker API use is not yet implemented"
   else
     # Tacker CLI use
     echo "$0: Get external network for Floating IP allocations"
 
-#    echo "$0: Create Nova key pair"
-#    mkdir -p ~/.ssh
-#    nova keypair-delete vHello
-#    nova keypair-add vHello > ~/.ssh/vHello.pem
-#    chmod 600 ~/.ssh/vHello.pem
-    
     echo "$0: create VNFD"
-    tacker vnfd-create --vnfd-file tosca-vnfd-hello-world-tacker.yaml --name hello-world-tacker
+    cd /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker
+    tacker vnfd-create --vnfd-file blueprint.yaml --name hello-world-tacker
     if [ $? -eq 1 ]; then fail; fi
 
     echo "$0: create VNF"
     tacker vnf-create --vnfd-name hello-world-tacker --name hello-world-tacker
     if [ $? -eq 1 ]; then fail; fi
   fi
-  
+
   echo "$0: directly set port security on ports (bug/unsupported in Mitaka Tacker?)"
+  active=""
+  while [[ -z $active ]]
+  do
+    active=$(tacker vnf-show hello-world-tacker | grep ACTIVE)
+    sleep 10
+  done
   HEAT_ID=$(tacker vnf-show hello-world-tacker | awk "/instance_id/ { print \$4 }")
   SERVER_ID=$(openstack stack resource list $HEAT_ID | awk "/VDU1 / { print \$4 }")
   id=($(neutron port-list|grep -v "+"|grep -v name|awk '{print $2}'))
-  for id in ${id[@]}; do 
+  for id in ${id[@]}; do
     if [[ $(neutron port-show $id|grep $SERVER_ID) ]]; then neutron port-update ${id} --port-security-enabled=True; fi
   done
 
@@ -109,19 +97,20 @@ start() {
   neutron security-group-rule-create --direction ingress --protocol=TCP --port-range-min=80 --port-range-max=80 vHello
   openstack server add security group $SERVER_ID vHello
   openstack server add security group $SERVER_ID default
- 
+
   echo "$0: associate floating IP"
   get_floating_net
   fip=$(neutron floatingip-create $floating_network_name | awk "/floating_ip_address/ { print \$4 }")
   nova floating-ip-associate $SERVER_ID $fip
-  
+
   echo "$0: get vHello server address"
   SERVER_IP=$(openstack server show $SERVER_ID | awk "/ addresses / { print \$6 }")
   SERVER_URL="http://$SERVER_IP"
-		
+
   echo "$0: start vHello web server"
-  scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no start.sh opnfv:opnfv@$SERVER_IP:/home/opnfv
-  ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no opnfv:opnfv@$SERVER_IP "bash start.sh; exit"
+  chown root ~/.ssh/vHello.pem
+  scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker/start.sh ubuntu@$SERVER_IP:/home/ubuntu/start.sh
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$SERVER_IP "bash /home/ubuntu/start.sh; exit"
 
   echo "$0: verify vHello server is running"
   if [[ $(curl $SERVER_URL | grep -c "Hello, World!") != 1 ]]; then fail; fi
@@ -133,18 +122,14 @@ clean() {
   echo "$0: setup OpenStack CLI environment"
   source /tmp/tacker/admin-openrc.sh
 
- if [[ "$1" == "tacker-api" ]]; then 
+  if [[ "$1" == "tacker-api" ]]; then
     echo "$0: Tacker API use is not yet implemented"
-  else 
+  else
     echo "$0: uninstall vHello blueprint via CLI"
-    tacker vnf-delete tosca-hello-world
-    if [ $? -eq 1 ]; then fail; fi
-    tacker vnfd-delete tosca-hello-world
-    if [ $? -eq 1 ]; then fail; fi
-    neutron security-group-delete vHello
-    if [ $? -eq 1 ]; then fail; fi
+    tacker vnf-delete hello-world-tacker
+    tacker vnfd-delete hello-world-tacker
+    sg=($(openstack security group list|grep vHello|awk '{print $2}')); for id in ${sg[@]}; do openstack security group delete ${id};  done
     fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
-    if [ $? -eq 1 ]; then fail; fi
   fi
   pass
 }
@@ -162,18 +147,59 @@ if [[ "$2" == "setup" ]]; then
   echo "$0: tacker-setup part 2"
   CONTAINER=$(sudo docker ps -l | awk "/tacker/ { print \$1 }")
   sudo docker exec $CONTAINER /tmp/tacker/tacker-setup.sh $1 setup
-  if [ $? -eq 1 ]; then fail; fi
+
+  echo "$0: reset blueprints folder"
+  if [[ -d /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then rm -rf /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker; fi
+  mkdir -p /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker
+
+  echo "$0: copy tosca-vnfd-hello-world-tacker to blueprints folder"
+  cp -r blueprints/tosca-vnfd-hello-world-tacker /tmp/tacker/blueprints
+
+  echo "$0: Create Nova key pair"
+  cd ~
+  mkdir -p ~/.ssh
+  nova keypair-delete vHello
+  nova keypair-add vHello > ~/.ssh/vHello.pem
+  chmod 600 ~/.ssh/vHello.pem
+  cp ~/.ssh/vHello.pem /tmp/tacker
+  pubkey=$(nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g')
+  nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g' >~/.ssh/vHello.pub
+  cp ~/.ssh/vHello.pub /tmp/tacker
+
+#  echo "$0: Inject key into xenial server image"
+#  wget http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
+#  sudo yum install -y libguestfs-tools
+#  guestfish <<EOF
+#add xenial-server-cloudimg-amd64-disk1.img
+#run
+#mount /dev/sda1 /
+#mkdir /home/ubuntu
+#mkdir /home/ubuntu/.ssh
+#cat <<EOM >/home/ubuntu/.ssh/authorized_keys
+#$pubkey
+#EOM
+#exit
+#chown -R ubuntu /home/ubuntu
+#EOF
+
+  echo "$0: Setup image_id"
+  wget http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img
+  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
+  if [ -z $image_id ]; then glance image-delete $image_id; fi 
+  glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file xenial-server-cloudimg-amd64-disk1.img --container-format bare
+
   pass
 else
   if [[ $# -eq 3 ]]; then
     # running inside the tacker container, ready to go
     if [[ "$3" == "start" ]]; then start $1; fi
-    if [[ "$3" == "clean" ]]; then clean $1; fi    
+    if [[ "$3" == "clean" ]]; then clean $1; fi
   else
     echo "$0: pass $2 command to vHello.sh in tacker container"
     CONTAINER=$(sudo docker ps -a | awk "/tacker/ { print \$1 }")
-    sudo docker exec $CONTAINER /tmp/tacker/vHello.sh $1 $2 $2
+    sudo docker exec $CONTAINER /tmp/tacker/vHello_Tacker.sh $1 $2 $2
     if [ $? -eq 1 ]; then fail; fi
     pass
   fi
 fi
+
