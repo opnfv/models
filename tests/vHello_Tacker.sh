@@ -109,8 +109,25 @@ start() {
 
   echo "$0: start vHello web server"
   chown root ~/.ssh/vHello.pem
-  scp -i /tmp/tacker/vHello.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker/start.sh ubuntu@$SERVER_IP:/home/ubuntu/start.sh
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$SERVER_IP "bash /home/ubuntu/start.sh; exit"
+  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$SERVER_IP <<EOF
+cat << EOM | sudo tee /home/ubuntu/index.html
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello World!</title>
+<meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1"/>
+<style>
+body { width: 100%; background-color: white; color: black; padding: 0px; margin: 0px; font-family: sans-serif; font-size:100%; }
+</style>
+</head>
+<body>
+Hello World!<br>
+<a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
+</body></html>
+EOM
+nohup sudo python3 -m http.server 80 > /dev/null 2>&1 &
+exit
+EOF
 
   echo "$0: verify vHello server is running"
   if [[ $(curl $SERVER_URL | grep -c "Hello, World!") != 1 ]]; then fail; fi
