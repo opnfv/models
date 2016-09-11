@@ -129,11 +129,6 @@ function setup_test_environment () {
     echo "$0: Add router interface for vnf_private network"
     neutron router-interface-add vnf_private_router subnet=vnf_private
   fi
-
-  echo "$0: Create image cirros-0.3.4-x86_64-uec"
-  image=$(openstack image list | awk "/ cirros-0.3.4-x86_64-uec / { print \$2 }")
-  if [ -z $image ]; then glance --os-image-api-version 1 image-create --name cirros-0.3.4-x86_64-uec --disk-format qcow2 --location http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img --container-format bare
-  fi
 }
 
 function create_tacker_container () {
@@ -166,8 +161,8 @@ gpgkey=https://yum.dockerproject.org/gpg
 EOF
     sudo yum install -y docker-engine
     # xenial is needed for python 3.5
-    sudo docker pull ubuntu:xenial
     sudo service docker start
+    sudo docker pull ubuntu:xenial
     sudo docker run -i -t -d -v /tmp/tacker/:/tmp/tacker --name tacker ubuntu:xenial /bin/bash
     echo $(sudo docker ps -a | awk "/tacker/ { print \$1 }")
   fi
