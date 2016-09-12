@@ -105,12 +105,11 @@ function setup_test_environment () {
     echo "$0: vnf_mgmt router exists"
   else
     neutron router-create vnf_mgmt_router
-    echo "$0: Add router interface for vnf_mgmt network"
-    neutron router-interface-add vnf_mgmt_router subnet=vnf_mgmt
-    neutron router-create vnf_mgmt_router
-    echo "$0: Create router gateway for vnf_private network"
+    echo "$0: Create router gateway for vnf_mgmt network"
     get_external_net
     neutron router-gateway-set vnf_mgmt_router $EXTERNAL_NETWORK_NAME
+    echo "$0: Add router interface for vnf_mgmt network"
+    neutron router-interface-add vnf_mgmt_router subnet=vnf_mgmt
   fi
 
   echo "Create private network"
