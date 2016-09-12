@@ -107,7 +107,7 @@ function setup_test_environment () {
     neutron router-create vnf_mgmt_router
     echo "$0: Add router interface for vnf_mgmt network"
     neutron router-interface-add vnf_mgmt_router subnet=vnf_mgmt
-    neutron router-create vnf_private_router
+    neutron router-create vnf_mgmt_router
     echo "$0: Create router gateway for vnf_private network"
     get_external_net
     neutron router-gateway-set vnf_mgmt_router $EXTERNAL_NETWORK_NAME
@@ -168,7 +168,6 @@ EOF
     sudo service docker start
     sudo docker pull ubuntu:xenial
     sudo docker run -i -t -d -v /tmp/tacker/:/tmp/tacker --name tacker ubuntu:xenial /bin/bash
-    echo $(sudo docker ps -a | awk "/tacker/ { print \$1 }")
   fi
 }
 
@@ -318,16 +317,6 @@ case "$2" in
     exit 0
     ;;
   "setup")
-     uid=$(openstack user list | awk "/ tacker / { print \$2 }")
-     if [[ $uid ]]; then
-       echo "$0: Tacker user exists, assuming Tacker service is already installed"
-     else
-       install_tacker
-     fi
-
-    echo "$0: Prepare Tacker test network environment"
-    setup_test_environment
-    exit 0
     ;;
   "clean")
     source /tmp/tacker/admin-openrc.sh
@@ -356,3 +345,9 @@ case "$2" in
     echo "clean: remove Tacker service"
     exit 1
 esac
+
+echo "$0: Install Tacker and prerequisites"
+install_tacker
+
+echo "$0: Prepare Tacker test network environment"
+setup_test_environment
