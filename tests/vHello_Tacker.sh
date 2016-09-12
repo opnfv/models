@@ -131,8 +131,12 @@ nohup sudo python3 -m http.server 80 > /dev/null 2>&1 &
 exit
 EOF
 
+  echo "$0: wait 10 seconds for vHello server to startup"
+  sleep 10
+
   echo "$0: verify vHello server is running"
-  if [[ $(curl $SERVER_URL | grep -c "Hello, World!") != 1 ]]; then fail; fi
+  apt-get install -y curl
+  if [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]]; then fail; fi
 
   pass
 }
@@ -203,6 +207,7 @@ if [[ "$2" == "setup" ]]; then
   # Using pre-key-injected image for now, vHello.pem as provided in the blueprint
   wget http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img
   cp blueprints/tosca-vnfd-hello-world-tacker/vHello.pem /tmp/tacker
+  chmod 600 /tmp/tacker/vHello.pem
 
   echo "$0: Setup image_id"
   image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }" | tr -dc \n)
