@@ -155,7 +155,7 @@ clean() {
 
 if [[ "$2" == "setup" ]]; then
   echo "$0: Setup temp test folder /tmp/tacker and copy this script there"
-  mkdir /tmp/tacker
+  mkdir -p /tmp/tacker
   chmod 777 /tmp/tacker/
   cp $0 /tmp/tacker/.
   chmod 755 /tmp/tacker/*.sh
@@ -205,9 +205,8 @@ if [[ "$2" == "setup" ]]; then
   cp blueprints/tosca-vnfd-hello-world-tacker/vHello.pem /tmp/tacker
 
   echo "$0: Setup image_id"
-  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
-  if [ -z $image_id ]; then glance image-delete $image_id; fi 
-  glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file xenial-server-cloudimg-amd64-disk1.img --container-format bare
+  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }" | tr -dc \n)
+  if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi 
 
   pass
 else
