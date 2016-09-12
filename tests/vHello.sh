@@ -204,7 +204,7 @@ if [[ "$2" == "setup" ]]; then
 
   echo "$0: cloudify-setup part 2"
   CONTAINER=$(sudo docker ps -l | awk "/cloudify/ { print \$1 }")
-  sudo docker exec $CONTAINER /tmp/cloudify/cloudify-setup.sh $1 setup
+  sudo docker exec $CONTAINER /bin/bash /tmp/cloudify/cloudify-setup.sh $1 setup
   if [ $? -eq 1 ]; then fail; fi
   pass
 else
@@ -215,7 +215,7 @@ else
   else
     echo "$0: pass $2 command to vHello.sh in cloudify container"
     CONTAINER=$(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
-    sudo docker exec $CONTAINER /tmp/cloudify/vHello.sh $1 $2 $2
+    sudo docker exec $CONTAINER /bin/bash /tmp/cloudify/vHello.sh $1 $2 $2
     if [ $? -eq 1 ]; then fail; fi
     pass
   fi

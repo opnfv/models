@@ -350,3 +350,4 @@ install_tacker
 
 echo "$0: Prepare Tacker test network environment"
 setup_test_environment
+cd /tmp/tacker

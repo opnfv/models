@@ -169,7 +169,7 @@ if [[ "$2" == "setup" ]]; then
 
   echo "$0: tacker-setup part 2"
   CONTAINER=$(sudo docker ps -l | awk "/tacker/ { print \$1 }")
-  sudo docker exec $CONTAINER /tmp/tacker/tacker-setup.sh $1 setup
+  sudo docker exec $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
 
   echo "$0: reset blueprints folder"
   if [[ -d /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then rm -rf /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker; fi
