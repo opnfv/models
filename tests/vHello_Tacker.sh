@@ -112,7 +112,7 @@ function setup () {
 #EOF
 
   # Using pre-key-injected image for now, vHello.pem as provided in the blueprint
-  if [ ! -f xenial-server-cloudimg-amd64-disk1.img ]; then 
+  if [ ! -f /tmp/xenial-server-cloudimg-amd64-disk1.img ]; then 
     wget -O /tmp/xenial-server-cloudimg-amd64-disk1.img http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img
   fi
   cp blueprints/tosca-vnfd-hello-world-tacker/vHello.pem /tmp/tacker
