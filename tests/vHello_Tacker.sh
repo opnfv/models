@@ -32,15 +32,13 @@ set -x
 trap 'fail' ERR
 
 pass() {
-  echo "Hooray!"
+  echo "$0: Hooray!"
   set +x #echo off
   exit 0
 }
 
-# Use this to trigger fail() at the right places
-# if [ "$RESULT" == "Test Failed!" ]; then fail; fi
 fail() {
-  echo "Test Failed!"
+  echo "$0: Test Failed!"
   set +x
   exit 1
 }
@@ -78,13 +76,19 @@ start() {
     if [ $? -eq 1 ]; then fail; fi
   fi
 
-  echo "$0: directly set port security on ports (bug/unsupported in Mitaka Tacker?)"
+  echo "$0: wait for hello-world-tacker to go ACTIVE"
   active=""
   while [[ -z $active ]]
   do
     active=$(tacker vnf-show hello-world-tacker | grep ACTIVE)
+    if [ ! -z error=$(tacker vnf-show hello-world-tacker | grep ERROR) ]; then 
+      echo "$0: hello-world-tacker VNF creation failed with state ERROR"
+      fail
+    fi
     sleep 10
   done
+
+  echo "$0: directly set port security on ports (bug/unsupported in Mitaka Tacker?)"
   HEAT_ID=$(tacker vnf-show hello-world-tacker | awk "/instance_id/ { print \$4 }")
   SERVER_ID=$(openstack stack resource list $HEAT_ID | awk "/VDU1 / { print \$4 }")
   id=($(neutron port-list|grep -v "+"|grep -v name|awk '{print $2}'))
@@ -109,6 +113,9 @@ start() {
   SERVER_IP=$(openstack server show $SERVER_ID | awk "/ addresses / { print \$6 }")
   SERVER_URL="http://$SERVER_IP"
 
+  echo "$0: wait 30 seconds for vHello server to startup"
+  sleep 30
+
   echo "$0: start vHello web server"
   chown root /tmp/tacker/vHello.pem
   ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$SERVER_IP <<EOF
@@ -131,7 +138,7 @@ nohup sudo python3 -m http.server 80 > /dev/null 2>&1 &
 exit
 EOF
 
-  echo "$0: wait 10 seconds for vHello server to startup"
+  echo "$0: wait 10 seconds for vHello web server to startup"
   sleep 10
 
   echo "$0: verify vHello server is running"
@@ -151,8 +158,8 @@ clean() {
     echo "$0: uninstall vHello blueprint via CLI"
     vid=($(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do tacker vnf-delete ${id};  done
     vid=($(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do tacker vnfd-delete ${id};  done
-    sg=($(openstack security group list|grep vHello|awk '{print $2}')); for id in ${sg[@]}; do openstack security group delete ${id};  done
     fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
+    sg=($(openstack security group list|grep vHello|awk '{print $2}')); for id in ${sg[@]}; do openstack security group delete ${id};  done
   fi
   pass
 }
