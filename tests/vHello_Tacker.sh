@@ -20,11 +20,12 @@
 # How to use:
 #   $ git clone https://gerrit.opnfv.org/gerrit/models
 #   $ cd models/tests
-#   $ bash vHello_Tacker.sh [tacker-cli|tacker-api] [setup|start|clean]
+#   $ bash vHello_Tacker.sh [tacker-cli|tacker-api] [setup|start|run|clean]
 #   tacker-cli: use Tacker CLI
 #   tacker-api: use Tacker RESTful API (not yet implemented)
 #   setup: setup test environment
 #   start: run test
+#   run: setup test environment and run test
 #   clean: cleanup after test
 
 set -x
@@ -54,6 +55,71 @@ function get_floating_net () {
     echo "$0: Floating network not found"
     exit 1
   fi
+}
+
+function setup () {
+  echo "$0: Setup temp test folder /tmp/tacker and copy this script there"
+  if [ -d /tmp/tacker ]; then sudo rm -rf /tmp/tacker; fi 
+  mkdir -p /tmp/tacker
+  chmod 777 /tmp/tacker/
+  cp $0 /tmp/tacker/.
+  chmod 755 /tmp/tacker/*.sh
+
+  echo "$0: tacker-setup part 1"
+  bash utils/tacker-setup.sh $1 init
+
+  echo "$0: tacker-setup part 2"
+  CONTAINER=$(sudo docker ps -l | awk "/tacker/ { print \$1 }")
+  dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
+  if [ "$dist" == "Ubuntu" ]; then
+    sudo docker exec -it $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
+  else
+    sudo docker exec -i -t $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
+  fi
+
+  echo "$0: reset blueprints folder"
+  if [[ -d /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then rm -rf /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker; fi
+  mkdir -p /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker
+
+  echo "$0: copy tosca-vnfd-hello-world-tacker to blueprints folder"
+  cp -r blueprints/tosca-vnfd-hello-world-tacker /tmp/tacker/blueprints
+
+  # Following two steps are in testing still. The guestfish step needs work.
+
+  #  echo "$0: Create Nova key pair"
+  #  mkdir -p ~/.ssh
+  #  nova keypair-delete vHello
+  #  nova keypair-add vHello > /tmp/tacker/vHello.pem
+  #  chmod 600 /tmp/tacker/vHello.pem
+  #  pubkey=$(nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g')
+  #  nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g' >/tmp/tacker/vHello.pub
+
+  echo "$0: Inject key into xenial server image"
+  #  wget http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
+  #  sudo yum install -y libguestfs-tools
+  #  guestfish <<EOF
+#add xenial-server-cloudimg-amd64-disk1.img
+#run
+#mount /dev/sda1 /
+#mkdir /home/ubuntu
+#mkdir /home/ubuntu/.ssh
+#cat <<EOM >/home/ubuntu/.ssh/authorized_keys
+#$pubkey
+#EOM
+#exit
+#chown -R ubuntu /home/ubuntu
+#EOF
+
+  # Using pre-key-injected image for now, vHello.pem as provided in the blueprint
+  if [ ! -f xenial-server-cloudimg-amd64-disk1.img ]; then wget http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img; fi
+  cp blueprints/tosca-vnfd-hello-world-tacker/vHello.pem /tmp/tacker
+  chmod 600 /tmp/tacker/vHello.pem
+
+  echo "$0: Setup image_id"
+  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
+  if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi 
+
+  pass
 }
 
 start() {
@@ -164,80 +230,36 @@ clean() {
   pass
 }
 
-if [[ "$2" == "setup" ]]; then
-  echo "$0: Setup temp test folder /tmp/tacker and copy this script there"
-  if [ -d /tmp/tacker ]; then sudo rm -rf /tmp/tacker; fi 
-  mkdir -p /tmp/tacker
-  chmod 777 /tmp/tacker/
-  cp $0 /tmp/tacker/.
-  chmod 755 /tmp/tacker/*.sh
+forward_to_container () {
+  echo "$0: pass $2 command to vHello.sh in tacker container"
+  CONTAINER=$(sudo docker ps -a | awk "/tacker/ { print \$1 }")
+  sudo docker exec $CONTAINER /bin/bash /tmp/tacker/vHello_Tacker.sh $1 $2 $2
+  if [ $? -eq 1 ]; then fail; fi
+}
 
-  echo "$0: tacker-setup part 1"
-  bash utils/tacker-setup.sh $1 init
-
-  echo "$0: tacker-setup part 2"
-  CONTAINER=$(sudo docker ps -l | awk "/tacker/ { print \$1 }")
-  dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
-  if [ "$dist" == "Ubuntu" ]; then
-    sudo docker exec -it $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
-  else
-    sudo docker exec -i -t $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
-  fi
-
-  echo "$0: reset blueprints folder"
-  if [[ -d /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then rm -rf /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker; fi
-  mkdir -p /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker
-
-  echo "$0: copy tosca-vnfd-hello-world-tacker to blueprints folder"
-  cp -r blueprints/tosca-vnfd-hello-world-tacker /tmp/tacker/blueprints
-
-# Following two steps are in testing still. The guestfish step needs work.
-
-#  echo "$0: Create Nova key pair"
-#  mkdir -p ~/.ssh
-#  nova keypair-delete vHello
-#  nova keypair-add vHello > /tmp/tacker/vHello.pem
-#  chmod 600 /tmp/tacker/vHello.pem
-#  pubkey=$(nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g')
-#  nova keypair-show vHello | grep "Public key:" | sed -- 's/Public key: //g' >/tmp/tacker/vHello.pub
-
-  echo "$0: Inject key into xenial server image"
-#  wget http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
-#  sudo yum install -y libguestfs-tools
-#  guestfish <<EOF
-#add xenial-server-cloudimg-amd64-disk1.img
-#run
-#mount /dev/sda1 /
-#mkdir /home/ubuntu
-#mkdir /home/ubuntu/.ssh
-#cat <<EOM >/home/ubuntu/.ssh/authorized_keys
-#$pubkey
-#EOM
-#exit
-#chown -R ubuntu /home/ubuntu
-#EOF
-
-  # Using pre-key-injected image for now, vHello.pem as provided in the blueprint
-  if [ ! -f xenial-server-cloudimg-amd64-disk1.img ]; then wget http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img; fi
-  cp blueprints/tosca-vnfd-hello-world-tacker/vHello.pem /tmp/tacker
-  chmod 600 /tmp/tacker/vHello.pem
-
-  echo "$0: Setup image_id"
-  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
-  if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi 
-
-  pass
-else
-  if [[ $# -eq 3 ]]; then
-    # running inside the tacker container, ready to go
-    if [[ "$3" == "start" ]]; then start $1; fi
-    if [[ "$3" == "clean" ]]; then clean $1; fi
-  else
-    echo "$0: pass $2 command to vHello.sh in tacker container"
-    CONTAINER=$(sudo docker ps -a | awk "/tacker/ { print \$1 }")
-    sudo docker exec $CONTAINER /bin/bash /tmp/tacker/vHello_Tacker.sh $1 $2 $2
-    if [ $? -eq 1 ]; then fail; fi
-    pass
-  fi
-fi
-
+dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
+case "$2" in
+  setup)
+    setup
+    ;;
+  run)
+    setup
+    forward_to_container $1 start
+    ;;
+  start|clean)
+    if [[ $# -eq 2 ]]; then forward_to_container $1 $2
+    else
+      # running inside the tacker container, ready to go
+      $2 $1
+    fi
+    ;;
+  *)
+    echo "usage: bash vHello_Tacker.sh [tacker-cli|tacker-api] [setup|start|run|clean]"
+    echo "tacker-cli: use Tacker CLI"
+    echo "tacker-api: use Tacker RESTful API (not yet implemented)"
+    echo "setup: setup test environment"
+    echo "start: run test"
+    echo "run: setup test environment and run test"
+    echo "clean: cleanup after test"
+    fail
+esac
