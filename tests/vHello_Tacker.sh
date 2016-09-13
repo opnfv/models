@@ -81,7 +81,7 @@ start() {
   while [[ -z $active ]]
   do
     active=$(tacker vnf-show hello-world-tacker | grep ACTIVE)
-    if [ $(tacker vnf-show hello-world-tacker | grep -c ERROR) > 0 ]; then 
+    if [ "$(tacker vnf-show hello-world-tacker | grep -c ERROR)" == "1" ]; then 
       echo "$0: hello-world-tacker VNF creation failed with state ERROR"
       fail
     fi
