@@ -20,12 +20,13 @@
 # How to use:
 #   $ git clone https://gerrit.opnfv.org/gerrit/models
 #   $ cd models/tests
-#   $ bash vHello_Tacker.sh [tacker-cli|tacker-api] [setup|start|run|clean]
+#   $ bash vHello_Tacker.sh [tacker-cli|tacker-api] [setup|start|run|stop|clean]
 #   tacker-cli: use Tacker CLI
 #   tacker-api: use Tacker RESTful API (not yet implemented)
 #   setup: setup test environment
-#   start: run test
+#   start: install blueprint and run test
 #   run: setup test environment and run test
+#   stop: stop test and uninstall blueprint
 #   clean: cleanup after test
 
 set -x
@@ -111,15 +112,15 @@ function setup () {
 #EOF
 
   # Using pre-key-injected image for now, vHello.pem as provided in the blueprint
-  if [ ! -f xenial-server-cloudimg-amd64-disk1.img ]; then wget http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img; fi
+  if [ ! -f xenial-server-cloudimg-amd64-disk1.img ]; then 
+    wget -O /tmp/xenial-server-cloudimg-amd64-disk1.img http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img
+  fi
   cp blueprints/tosca-vnfd-hello-world-tacker/vHello.pem /tmp/tacker
   chmod 600 /tmp/tacker/vHello.pem
 
   echo "$0: Setup image_id"
   image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
-  if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi 
-
-  pass
+  if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file /tmp/xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi 
 }
 
 start() {
@@ -210,11 +211,9 @@ EOF
   echo "$0: verify vHello server is running"
   apt-get install -y curl
   if [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]]; then fail; fi
-
-  pass
 }
 
-clean() {
+stop() {
   echo "$0: setup OpenStack CLI environment"
   source /tmp/tacker/admin-openrc.sh
 
@@ -226,6 +225,22 @@ clean() {
     vid=($(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do tacker vnfd-delete ${id};  done
     fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
     sg=($(openstack security group list|grep vHello|awk '{print $2}')); for id in ${sg[@]}; do openstack security group delete ${id};  done
+  fi
+}
+
+clean () {
+  echo "$0: setup OpenStack CLI environment"
+  source /tmp/tacker/admin-openrc.sh
+
+  if [[ "$1" == "tacker-api" ]]; then
+    echo "$0: Tacker API use is not yet implemented"
+  else
+    # Tacker CLI use
+    echo "$0: Stop and uninstall blueprint"
+    stop
+ 
+    echo "$0: Uninstall Tacker"
+    bash utils/tacker-setup.sh $1 clean
   fi
   pass
 }
@@ -240,26 +255,34 @@ forward_to_container () {
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 case "$2" in
   setup)
-    setup
+    setup $1
+    pass
     ;;
   run)
-    setup
+    setup $1
     forward_to_container $1 start
+    pass
     ;;
-  start|clean)
+  start|stop)
     if [[ $# -eq 2 ]]; then forward_to_container $1 $2
     else
       # running inside the tacker container, ready to go
       $2 $1
     fi
+    pass
+    ;;
+  clean)
+    clean $1
+    pass
     ;;
   *)
     echo "usage: bash vHello_Tacker.sh [tacker-cli|tacker-api] [setup|start|run|clean]"
     echo "tacker-cli: use Tacker CLI"
     echo "tacker-api: use Tacker RESTful API (not yet implemented)"
     echo "setup: setup test environment"
-    echo "start: run test"
+    echo "start: install blueprint and run test"
     echo "run: setup test environment and run test"
+    echo "stop: stop test and uninstall blueprint"
     echo "clean: cleanup after test"
     fail
 esac
