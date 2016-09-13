@@ -149,8 +149,8 @@ clean() {
     echo "$0: Tacker API use is not yet implemented"
   else
     echo "$0: uninstall vHello blueprint via CLI"
-    tacker vnf-delete hello-world-tacker
-    tacker vnfd-delete hello-world-tacker
+    vid=($(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do tacker vnf-delete ${id};  done
+    vid=($(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do tacker vnfd-delete ${id};  done
     sg=($(openstack security group list|grep vHello|awk '{print $2}')); for id in ${sg[@]}; do openstack security group delete ${id};  done
     fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
   fi
@@ -159,6 +159,7 @@ clean() {
 
 if [[ "$2" == "setup" ]]; then
   echo "$0: Setup temp test folder /tmp/tacker and copy this script there"
+  if [ -d /tmp/tacker ]; then sudo rm -rf /tmp/tacker; fi 
   mkdir -p /tmp/tacker
   chmod 777 /tmp/tacker/
   cp $0 /tmp/tacker/.
@@ -169,7 +170,12 @@ if [[ "$2" == "setup" ]]; then
 
   echo "$0: tacker-setup part 2"
   CONTAINER=$(sudo docker ps -l | awk "/tacker/ { print \$1 }")
-  sudo docker exec $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
+  dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
+  if [ "$dist" == "Ubuntu" ]; then
+    sudo docker exec -it $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
+  else
+    sudo docker exec -i -t $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
+  fi
 
   echo "$0: reset blueprints folder"
   if [[ -d /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then rm -rf /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker; fi
@@ -205,12 +211,12 @@ if [[ "$2" == "setup" ]]; then
 #EOF
 
   # Using pre-key-injected image for now, vHello.pem as provided in the blueprint
-  wget http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img
+  if [ ! -f xenial-server-cloudimg-amd64-disk1.img ]; then wget http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img; fi
   cp blueprints/tosca-vnfd-hello-world-tacker/vHello.pem /tmp/tacker
   chmod 600 /tmp/tacker/vHello.pem
 
   echo "$0: Setup image_id"
-  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }" | tr -dc \n)
+  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
   if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi 
 
   pass
@@ -222,7 +228,7 @@ else
   else
     echo "$0: pass $2 command to vHello.sh in tacker container"
     CONTAINER=$(sudo docker ps -a | awk "/tacker/ { print \$1 }")
-    sudo docker exec $CONTAINER /tmp/tacker/vHello_Tacker.sh $1 $2 $2
+    sudo docker exec $CONTAINER /bin/bash /tmp/tacker/vHello_Tacker.sh $1 $2 $2
     if [ $? -eq 1 ]; then fail; fi
     pass
   fi

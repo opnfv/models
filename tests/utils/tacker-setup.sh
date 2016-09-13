@@ -26,6 +26,18 @@
 #   setup: Setup of Tacker in the docker container
 #   clean: Clean
 
+pass() {
+  echo "$0: Hooray!"
+  set +x #echo off
+  exit 0
+}
+
+fail() {
+  echo "$0: Failed!"
+  set +x
+  exit 1
+}
+
 function setenv () {
 if [ "$dist" == "Ubuntu" ]; then
   echo "$0: Ubuntu-based install"
@@ -287,7 +299,7 @@ function install_tacker () {
   #service apache2 restart
 
   echo "$0: Start the Tacker Server"
-  python /usr/local/bin/tacker-server --config-file /usr/local/etc/tacker/tacker.conf --log-file /var/log/tacker/tacker.log & disown
+  nohup python /usr/local/bin/tacker-server --config-file /usr/local/etc/tacker/tacker.conf --log-file /var/log/tacker/tacker.log & disown
 
   echo "$0: Wait 30 seconds for Tacker server to come online"
   sleep 30
@@ -313,7 +325,7 @@ case "$2" in
      else
        create_tacker_container
      fi
-    exit 0
+    pass
     ;;
   "setup")
     ;;
@@ -335,14 +347,14 @@ case "$2" in
     neutron net-delete vnf_private
     sudo docker stop $(sudo docker ps -a | awk "/tacker/ { print \$1 }")
     sudo docker rm -v $(sudo docker ps -a | awk "/tacker/ { print \$1 }")
-    exit 0
+    pass
     ;;
   *)
     echo "usage: bash tacker-setup.sh [tacker-cli|tacker-api] [init|setup|clean]"
     echo "init: Initialize docker container"
     echo "setup: Setup of Tacker in the docker container"
     echo "clean: remove Tacker service"
-    exit 1
+    fail
 esac
 
 echo "$0: Install Tacker and prerequisites"
@@ -351,3 +363,4 @@ install_tacker
 echo "$0: Prepare Tacker test network environment"
 setup_test_environment
 cd /tmp/tacker
+pass
