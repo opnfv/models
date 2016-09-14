@@ -102,51 +102,7 @@ function get_external_net () {
   fi
 }
 
-function setup_test_environment () {
-  echo "Create management network"
-  if [ $(neutron net-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
-    echo "$0: vnf_mgmt network exists"
-  else
-    neutron net-create vnf_mgmt		
-    echo "$0: Create management subnet"
-    neutron subnet-create vnf_mgmt 192.168.200.0/24 --name vnf_mgmt --gateway 192.168.200.1 --enable-dhcp --allocation-pool start=192.168.200.2,end=192.168.200.254 --dns-nameserver 8.8.8.8
-  fi
-
-  echo "$0: Create router for vnf_mgmt network"
-  if [ $(neutron router-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
-    echo "$0: vnf_mgmt router exists"
-  else
-    neutron router-create vnf_mgmt_router
-    echo "$0: Create router gateway for vnf_mgmt network"
-    get_external_net
-    neutron router-gateway-set vnf_mgmt_router $EXTERNAL_NETWORK_NAME
-    echo "$0: Add router interface for vnf_mgmt network"
-    neutron router-interface-add vnf_mgmt_router subnet=vnf_mgmt
-  fi
-
-  echo "Create private network"
-  if [ $(neutron net-list | awk "/ vnf_private / { print \$2 }") ]; then
-    echo "$0: vnf_private network exists"
-  else
-    neutron net-create vnf_private		
-    echo "$0: Create private subnet"
-    neutron subnet-create vnf_private 192.168.201.0/24 --name vnf_private --gateway 192.168.201.1 --enable-dhcp --allocation-pool start=192.168.201.2,end=192.168.201.254 --dns-nameserver 8.8.8.8
-  fi
-
-  echo "$0: Create router for vnf_private network"
-  if [ $(neutron router-list | awk "/ vnf_private / { print \$2 }") ]; then
-    echo "$0: vnf_private router exists"
-  else
-    neutron router-create vnf_private_router
-    echo "$0: Create router gateway for vnf_private network"
-    get_external_net
-    neutron router-gateway-set vnf_private_router $EXTERNAL_NETWORK_NAME
-    echo "$0: Add router interface for vnf_private network"
-    neutron router-interface-add vnf_private_router subnet=vnf_private
-  fi
-}
-
-function create_tacker_container () {
+function create_container () {
   echo "$0: Creating docker container for Tacker installation"
   # STEP 1: Create the Tacker container and launch it
   echo "$0: Copy this script to /tmp/tacker"
@@ -182,7 +138,7 @@ EOF
   fi
 }
 
-function install_tacker () {
+function setup () {
   echo "$0: Installing Tacker"
   # STEP 2: Install Tacker in the container
   # Per http://docs.openstack.org/developer/tacker/install/manual_installation.html
@@ -314,39 +270,93 @@ project_name: admin
 EOF
 
   tacker vim-register --config-file vim-config.yaml --description OpenStack --name VIM0
+
+  setup_test_environment
+}
+
+function setup_test_environment () {
+  echo "Create management network"
+  if [ $(neutron net-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
+    echo "$0: vnf_mgmt network exists"
+  else
+    neutron net-create vnf_mgmt		
+    echo "$0: Create management subnet"
+    neutron subnet-create vnf_mgmt 192.168.200.0/24 --name vnf_mgmt --gateway 192.168.200.1 --enable-dhcp --allocation-pool start=192.168.200.2,end=192.168.200.254 --dns-nameserver 8.8.8.8
+  fi
+
+  echo "$0: Create router for vnf_mgmt network"
+  if [ $(neutron router-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
+    echo "$0: vnf_mgmt router exists"
+  else
+    neutron router-create vnf_mgmt_router
+    echo "$0: Create router gateway for vnf_mgmt network"
+    get_external_net
+    neutron router-gateway-set vnf_mgmt_router $EXTERNAL_NETWORK_NAME
+    echo "$0: Add router interface for vnf_mgmt network"
+    neutron router-interface-add vnf_mgmt_router subnet=vnf_mgmt
+  fi
+
+  echo "Create private network"
+  if [ $(neutron net-list | awk "/ vnf_private / { print \$2 }") ]; then
+    echo "$0: vnf_private network exists"
+  else
+    neutron net-create vnf_private		
+    echo "$0: Create private subnet"
+    neutron subnet-create vnf_private 192.168.201.0/24 --name vnf_private --gateway 192.168.201.1 --enable-dhcp --allocation-pool start=192.168.201.2,end=192.168.201.254 --dns-nameserver 8.8.8.8
+  fi
+
+  echo "$0: Create router for vnf_private network"
+  if [ $(neutron router-list | awk "/ vnf_private / { print \$2 }") ]; then
+    echo "$0: vnf_private router exists"
+  else
+    neutron router-create vnf_private_router
+    echo "$0: Create router gateway for vnf_private network"
+    get_external_net
+    neutron router-gateway-set vnf_private_router $EXTERNAL_NETWORK_NAME
+    echo "$0: Add router interface for vnf_private network"
+    neutron router-interface-add vnf_private_router subnet=vnf_private
+  fi
+}
+
+function clean () {
+  source /tmp/tacker/admin-openrc.sh
+  openstack endpoint delete $(openstack endpoint list | awk "/tacker/ { print \$2 }")
+  openstack user delete $(openstack user list | awk "/tacker/ { print \$2 }")
+  openstack service delete $(openstack service list | awk "/tacker/ { print \$2 }")
+  pid=($(neutron port-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${pid[@]}; do neutron port-delete ${id};  done
+  sid=($(openstack stack list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${sid[@]}; do openstack stack delete ${id};  done
+  sid=($(openstack security group list|grep security_group_local_security_group|awk '{print $2}')); for id in ${sid[@]}; do openstack security group delete ${id};  done
+  neutron router-gateway-clear vnf_mgmt_router
+  pid=($(neutron router-port-list vnf_mgmt_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_mgmt_router vnf_mgmt;  done
+  neutron router-delete vnf_mgmt_router
+  neutron net-delete vnf_mgmt
+  neutron router-gateway-clear vnf_private_router
+  pid=($(neutron router-port-list vnf_private_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_private_router vnf_private;  done
+  neutron router-delete vnf_private_router
+  neutron net-delete vnf_private
+  sudo docker stop $(sudo docker ps -a | awk "/tacker/ { print \$1 }")
+  sudo docker rm -v $(sudo docker ps -a | awk "/tacker/ { print \$1 }")
 }
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 case "$2" in
   "init")
-     uid=$(openstack user list | awk "/ tacker / { print \$2 }")
-     if [[ $uid ]]; then
-       echo "$0: Tacker user exists, assuming Tacker service is already installed"
-     else
-       create_tacker_container
-     fi
+    uid=$(openstack user list | awk "/ tacker / { print \$2 }")
+    if [[ $uid ]]; then
+      echo "$0: Remove prior Tacker user etc"
+      openstack user delete tacker
+      openstack service delete tacker
+      # Note: deleting the service deletes the endpoint
+    fi
+    create_container
     pass
     ;;
   "setup")
+    setup
+    pass
     ;;
   "clean")
-    source /tmp/tacker/admin-openrc.sh
-    openstack endpoint delete $(openstack endpoint list | awk "/tacker/ { print \$2 }")
-    openstack user delete $(openstack user list | awk "/tacker/ { print \$2 }")
-    openstack service delete $(openstack service list | awk "/tacker/ { print \$2 }")
-    pid=($(neutron port-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${pid[@]}; do neutron port-delete ${id};  done
-    sid=($(openstack stack list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${sid[@]}; do openstack stack delete ${id};  done
-    sid=($(openstack security group list|grep security_group_local_security_group|awk '{print $2}')); for id in ${sid[@]}; do openstack security group delete ${id};  done
-    neutron router-gateway-clear vnf_mgmt_router
-    pid=($(neutron router-port-list vnf_mgmt_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_mgmt_router vnf_mgmt;  done
-    neutron router-delete vnf_mgmt_router
-    neutron net-delete vnf_mgmt
-    neutron router-gateway-clear vnf_private_router
-    pid=($(neutron router-port-list vnf_private_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_private_router vnf_private;  done
-    neutron router-delete vnf_private_router
-    neutron net-delete vnf_private
-    sudo docker stop $(sudo docker ps -a | awk "/tacker/ { print \$1 }")
-    sudo docker rm -v $(sudo docker ps -a | awk "/tacker/ { print \$1 }")
+    clean
     pass
     ;;
   *)
@@ -356,11 +366,3 @@ case "$2" in
     echo "clean: remove Tacker service"
     fail
 esac
-
-echo "$0: Install Tacker and prerequisites"
-install_tacker
-
-echo "$0: Prepare Tacker test network environment"
-setup_test_environment
-cd /tmp/tacker
-pass

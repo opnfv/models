@@ -45,7 +45,7 @@ fail() {
   exit 1
 }
 
-function get_floating_net () {
+get_floating_net () {
   network_ids=($(neutron net-list|grep -v "+"|grep -v name|awk '{print $2}'))
   for id in ${network_ids[@]}; do
       [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && floating_network_id=${id}
@@ -58,7 +58,19 @@ function get_floating_net () {
   fi
 }
 
-function setup () {
+try () {
+  count=$1
+  $3
+  while [[ $? -eq 1 && $count -gt 0 ]] 
+  do 
+    sleep $2
+    let count=$count-1
+    $3
+  done
+  if [[ $count -eq 0 ]]; then echo "$0: Command \"$3\" was not successful after $1 tries"; fi
+}
+
+setup () {
   echo "$0: Setup temp test folder /tmp/tacker and copy this script there"
   if [ -d /tmp/tacker ]; then sudo rm -rf /tmp/tacker; fi 
   mkdir -p /tmp/tacker
@@ -73,8 +85,13 @@ function setup () {
   CONTAINER=$(sudo docker ps -l | awk "/tacker/ { print \$1 }")
   dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
   if [ "$dist" == "Ubuntu" ]; then
+    echo "$0: JOID workaround for Colorado - enable ML2 port security"
+    juju set neutron-api enable-ml2-port-security=true
+
+    echo "$0: Execute tacker-setup.sh in the container"
     sudo docker exec -it $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
   else
+    echo "$0: Execute tacker-setup.sh in the container"
     sudo docker exec -i -t $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
   fi
 
@@ -113,7 +130,7 @@ function setup () {
 
   # Using pre-key-injected image for now, vHello.pem as provided in the blueprint
   if [ ! -f /tmp/xenial-server-cloudimg-amd64-disk1.img ]; then 
-    wget -O /tmp/xenial-server-cloudimg-amd64-disk1.img http://bkaj.net/opnfv/xenial-server-cloudimg-amd64-disk1.img
+    wget -O /tmp/xenial-server-cloudimg-amd64-disk1.img  http://artifacts.opnfv.org/models/images/xenial-server-cloudimg-amd64-disk1.img
   fi
   cp blueprints/tosca-vnfd-hello-world-tacker/vHello.pem /tmp/tacker
   chmod 600 /tmp/tacker/vHello.pem
@@ -224,7 +241,8 @@ stop() {
     vid=($(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do tacker vnf-delete ${id};  done
     vid=($(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do tacker vnfd-delete ${id};  done
     fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
-    sg=($(openstack security group list|grep vHello|awk '{print $2}')); for id in ${sg[@]}; do openstack security group delete ${id};  done
+    sg=($(openstack security group list|grep vHello|awk '{print $2}'))
+    for id in ${sg[@]}; do try 5 5 "openstack security group delete ${id}";  done
   fi
 }
 

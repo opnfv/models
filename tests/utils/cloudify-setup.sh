@@ -26,6 +26,18 @@
 #   setup: Setup of Cloudify in the docker container
 #   clean: Clean
 
+pass() {
+  echo "$0: Hooray!"
+  set +x #echo off
+  exit 0
+}
+
+fail() {
+  echo "$0: Failed!"
+  set +x
+  exit 1
+}
+
 function setenv () {
 if [ "$dist" == "Ubuntu" ]; then
   echo "$0: Ubuntu-based install"
@@ -88,29 +100,27 @@ function get_external_net () {
   fi
 }
 
-dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
-case "$2" in
-  "init")
-    # STEP 1: Create the container and launch it
-    echo "$0: Copy this script to /tmp/cloudify"
-    mkdir /tmp/cloudify
-    cp $0 /tmp/cloudify/.
-    chmod 755 /tmp/cloudify/*.sh
+function create_container () {
+  # STEP 1: Create the container and launch it
+  echo "$0: Copy this script to /tmp/cloudify"
+  mkdir /tmp/cloudify
+  cp $0 /tmp/cloudify/.
+  chmod 755 /tmp/cloudify/*.sh
 
-    echo "$0: Setup admin-openrc.sh"
-    setenv
-    echo "$0: Setup container"
-    if [ "$dist" == "Ubuntu" ]; then
-      # xenial is needed for python 3.5
-      sudo docker pull ubuntu:xenial
-      sudo service docker start
-#      sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
-      sudo docker run -it -d -v /tmp/cloudify/:/tmp/cloudify --name cloudify ubuntu:xenial /bin/bash
-      exit 0
-    else 
-      # Centos
-      echo "Centos-based install"
-      sudo tee /etc/yum.repos.d/docker.repo <<-'EOF'
+  echo "$0: Setup admin-openrc.sh"
+  setenv
+  echo "$0: Setup container"
+  if [ "$dist" == "Ubuntu" ]; then
+    # xenial is needed for python 3.5
+    sudo docker pull ubuntu:xenial
+    sudo service docker start
+#   sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
+    sudo docker run -it -d -v /tmp/cloudify/:/tmp/cloudify --name cloudify ubuntu:xenial /bin/bash
+    exit 0
+  else 
+    # Centos
+    echo "Centos-based install"
+    sudo tee /etc/yum.repos.d/docker.repo <<-'EOF'
 [dockerrepo]
 name=Docker Repository
 baseurl=https://yum.dockerproject.org/repo/main/centos/7/
@@ -118,16 +128,162 @@ enabled=1
 gpgcheck=1
 gpgkey=https://yum.dockerproject.org/gpg 
 EOF
-      sudo yum install -y docker-engine
-      # xenial is needed for python 3.5
-      sudo docker pull ubuntu:xenial
-      sudo service docker start
-#      sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
-      sudo docker run -i -t -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash
+    sudo yum install -y docker-engine
+    # xenial is needed for python 3.5
+    sudo docker pull ubuntu:xenial
+    sudo service docker start
+    #      sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
+    sudo docker run -i -t -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash
+  fi
+}
+
+function setup () {
+  echo "$0: Install dependencies - OS specific"
+  if [ "$dist" == "Ubuntu" ]; then
+    apt-get update
+    apt-get install -y python
+    apt-get install -y python-dev
+    apt-get install -y python-pip
+    apt-get install -y wget
+    apt-get install -y openssh-server
+    apt-get install -y git
+  #  apt-get install -y apg git gcc python-dev libxml2 libxslt1-dev libzip-dev 
+  #  pip install --upgrade pip virtualenv setuptools pbr tox
+  fi
+
+  cd ~
+
+  echo "$0: Install dependencies - generic"
+  pip install --upgrade pip setuptools
+
+  echo "$0: install python-openstackclient python-glanceclient"
+  pip install --upgrade python-openstackclient python-glanceclient  python-neutronclient
+  pip install --upgrade python-neutronclient
+
+  echo "$0: cleanup any previous install attempt"
+  if [ -d "~/cloudify" ]; then rm -rf ~/cloudify; fi  
+  if [ -d "~/cloudify-manager" ]; then rm -rf ~/cloudify-manager; fi  
+  rm ~/get-cloudify.py
+
+  echo "$0: Get Cloudify"
+  wget http://gigaspaces-repository-eu.s3.amazonaws.com/org/cloudify3/get-cloudify.py
+  python get-cloudify.py --upgrade
+
+  echo "$0: Initialize Cloudify"
+  cfy init
+
+  echo "$0: Setup admin-openrc.sh"
+  source /tmp/cloudify/admin-openrc.sh
+
+  get_external_net
+
+  if [ "$1" == "cloudify-manager" ]; then
+    echo "$0: Prepare the Cloudify Manager prerequisites and data"
+    mkdir -p ~/cloudify-manager
+    cd ~/cloudify-manager
+    wget https://github.com/cloudify-cosmo/cloudify-manager-blueprints/archive/3.4.tar.gz
+    mv 3.4.tar.gz cloudify-manager-blueprints.tar.gz
+    tar -xzvf cloudify-manager-blueprints.tar.gz
+    cd cloudify-manager-blueprints-3.4
+
+    echo "$0: Setup keystone_username"
+    sed -i -- "s/keystone_username: ''/keystone_username: '$OS_USERNAME'/g" openstack-manager-blueprint-inputs.yaml
+
+    echo "$0: Setup keystone_password"
+    sed -i -- "s/keystone_password: ''/keystone_password: '$OS_PASSWORD'/g" openstack-manager-blueprint-inputs.yaml
+
+    echo "$0: Setup keystone_tenant_name"
+    sed -i -- "s/keystone_tenant_name: ''/keystone_tenant_name: '$OS_TENANT_NAME'/g" openstack-manager-blueprint-inputs.yaml
+
+    echo "$0: Setup keystone_url"
+    # Use ~ instead of / as regex delimeter, since this variable contains slashes
+    sed -i -- "s~keystone_url: ''~keystone_url: '$OS_AUTH_URL'~g" openstack-manager-blueprint-inputs.yaml
+
+    echo "$0: Setup region"
+    sed -i -- "s/region: ''/region: '$OS_REGION_NAME'/g" openstack-manager-blueprint-inputs.yaml
+
+    echo "$0: Setup manager_public_key_name"
+    sed -i -- "s/#manager_public_key_name: ''/manager_public_key_name: 'cloudify-manager'/g" openstack-manager-blueprint-inputs.yaml
+
+    echo "$0: Setup agent_public_key_name"
+    sed -i -- "s/#agent_public_key_name: ''/agent_public_key_name: 'cloudify-agent'/g" openstack-manager-blueprint-inputs.yaml
+
+    echo "$0: Setup image_id"
+    # CentOS-7-x86_64-GenericCloud.qcow2 failed to be routable (?), so changed to 1607 version
+    image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
+    if [ -z $image ]; then 
+      glance --os-image-api-version 1 image-create --name CentOS-7-x86_64-GenericCloud-1607 --disk-format qcow2 --location http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1607.qcow2 --container-format bare
     fi
-    exit 0
+    image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
+    sed -i -- "s/image_id: ''/image_id: '$image'/g" openstack-manager-blueprint-inputs.yaml
+
+    echo "$0: Setup flavor_id"
+    flavor=$(nova flavor-show m1.large | awk "/ id / { print \$4 }")
+    sed -i -- "s/flavor_id: ''/flavor_id: '$flavor'/g" openstack-manager-blueprint-inputs.yaml
+
+    echo "$0: Setup external_network_name"
+    sed -i -- "s/external_network_name: ''/external_network_name: '$EXTERNAL_NETWORK_NAME'/g" openstack-manager-blueprint-inputs.yaml
+
+    # By default, only the cloudify-management-router is setup as DNS server, and it was failing to resolve internet domain names, which was blocking download of needed resources
+    echo "$0: Add nameservers"
+    sed -i -- "s/#management_subnet_dns_nameservers: \[\]/management_subnet_dns_nameservers: \[8.8.8.8\]/g" openstack-manager-blueprint-inputs.yaml
+
+    echo "$0: Bootstrap the manager"
+    cfy bootstrap --install-plugins --keep-up-on-failure --task-retries=10 -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
+
+    echo "$0: install needed packages to support blueprints 'not using managed plugins'"
+    # See https://cloudifysource.atlassian.net/browse/CFY-5050
+    cfy ssh -c "sudo yum install -y gcc gcc-c++ python-devel"
+
+    # Note setup_test_environment is not needed since the Manager sets up the 
+    # needed networks etc 
+  else
+    echo "$0: Prepare the Cloudify CLI prerequisites and data"
+
+    echo "Create management network"
+    if [ $(neutron net-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
+      echo "$0: vnf_mgmt network exists"
+    else
+      neutron net-create vnf_mgmt		
+      echo "$0: Create management subnet"
+      neutron subnet-create vnf_mgmt 10.0.0.0/24 --name vnf_mgmt --gateway 10.0.0.1 --enable-dhcp --allocation-pool start=10.0.0.2,end=10.0.0.254 --dns-nameserver 8.8.8.8
+    fi
+
+    setup_test_environment
+		
+    echo "$0: Install Cloudify OpenStack Plugin"
+  #  pip install https://github.com/cloudify-cosmo/cloudify-openstack-plugin/archive/1.4.zip
+    cd /tmp/cloudify
+    if [ -d "cloudify-openstack-plugin" ]; then rm -rf cloudify-openstack-plugin; fi  
+    git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git
+    git checkout 1.4
+    echo "$0: Patch plugin.yaml to reference management network"
+    sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'vnf_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml  		
+    cd cloudify-openstack-plugin
+    python setup.py build
+    python setup.py install
+
+    echo "$0: Install Cloudify Fabric (SSH) Plugin"
+    cd /tmp/cloudify
+    if [ -d "cloudify-fabric-plugin" ]; then rm -rf cloudify-fabric-plugin; fi  
+    git clone https://github.com/cloudify-cosmo/cloudify-fabric-plugin.git
+    cd cloudify-fabric-plugin
+    git checkout 1.4
+    python setup.py build
+    python setup.py install
+    cd ..
+  fi
+}
+
+dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
+case "$2" in
+  "init")
+    create_container
+    pass
     ;;
   "setup")
+    setup
+    pass
     ;;
   "clean")
     source /tmp/cloudify/admin-openrc.sh
@@ -138,7 +294,7 @@ EOF
     neutron net-delete vnf_mgmt
     sudo docker stop $(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
     sudo docker rm -v $(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
-    exit 0
+    pass
     ;;
   *)
     echo "usage: $ bash cloudify-setup.sh [cloudify-cli|cloudify-manager] [init|setup|clean]"
@@ -150,142 +306,3 @@ EOF
     exit 1
 esac
 
-echo "$0: Install dependencies - OS specific"
-if [ "$dist" == "Ubuntu" ]; then
-  apt-get update
-  apt-get install -y python
-  apt-get install -y python-dev
-  apt-get install -y python-pip
-  apt-get install -y wget
-  apt-get install -y openssh-server
-  apt-get install -y git
-#  apt-get install -y apg git gcc python-dev libxml2 libxslt1-dev libzip-dev 
-#  pip install --upgrade pip virtualenv setuptools pbr tox
-fi
-
-cd ~
-
-echo "$0: Install dependencies - generic"
-pip install --upgrade pip setuptools
-
-echo "$0: install python-openstackclient python-glanceclient"
-pip install --upgrade python-openstackclient python-glanceclient  python-neutronclient
-pip install --upgrade python-neutronclient
-
-echo "$0: cleanup any previous install attempt"
-if [ -d "~/cloudify" ]; then rm -rf ~/cloudify; fi  
-if [ -d "~/cloudify-manager" ]; then rm -rf ~/cloudify-manager; fi  
-rm ~/get-cloudify.py
-
-echo "$0: Get Cloudify"
-wget http://gigaspaces-repository-eu.s3.amazonaws.com/org/cloudify3/get-cloudify.py
-python get-cloudify.py --upgrade
-
-echo "$0: Initialize Cloudify"
-cfy init
-
-echo "$0: Setup admin-openrc.sh"
-source /tmp/cloudify/admin-openrc.sh
-
-get_external_net
-
-if [ "$1" == "cloudify-manager" ]; then
-  echo "$0: Prepare the Cloudify Manager prerequisites and data"
-  mkdir -p ~/cloudify-manager
-  cd ~/cloudify-manager
-  wget https://github.com/cloudify-cosmo/cloudify-manager-blueprints/archive/3.4.tar.gz
-  mv 3.4.tar.gz cloudify-manager-blueprints.tar.gz
-  tar -xzvf cloudify-manager-blueprints.tar.gz
-  cd cloudify-manager-blueprints-3.4
-
-  echo "$0: Setup keystone_username"
-  sed -i -- "s/keystone_username: ''/keystone_username: '$OS_USERNAME'/g" openstack-manager-blueprint-inputs.yaml
-
-  echo "$0: Setup keystone_password"
-  sed -i -- "s/keystone_password: ''/keystone_password: '$OS_PASSWORD'/g" openstack-manager-blueprint-inputs.yaml
-
-  echo "$0: Setup keystone_tenant_name"
-  sed -i -- "s/keystone_tenant_name: ''/keystone_tenant_name: '$OS_TENANT_NAME'/g" openstack-manager-blueprint-inputs.yaml
-
-  echo "$0: Setup keystone_url"
-  # Use ~ instead of / as regex delimeter, since this variable contains slashes
-  sed -i -- "s~keystone_url: ''~keystone_url: '$OS_AUTH_URL'~g" openstack-manager-blueprint-inputs.yaml
-
-  echo "$0: Setup region"
-  sed -i -- "s/region: ''/region: '$OS_REGION_NAME'/g" openstack-manager-blueprint-inputs.yaml
-
-  echo "$0: Setup manager_public_key_name"
-  sed -i -- "s/#manager_public_key_name: ''/manager_public_key_name: 'cloudify-manager'/g" openstack-manager-blueprint-inputs.yaml
-
-  echo "$0: Setup agent_public_key_name"
-  sed -i -- "s/#agent_public_key_name: ''/agent_public_key_name: 'cloudify-agent'/g" openstack-manager-blueprint-inputs.yaml
-
-  echo "$0: Setup image_id"
-  # CentOS-7-x86_64-GenericCloud.qcow2 failed to be routable (?), so changed to 1607 version
-  image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
-  if [ -z $image ]; then 
-    glance --os-image-api-version 1 image-create --name CentOS-7-x86_64-GenericCloud-1607 --disk-format qcow2 --location http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1607.qcow2 --container-format bare
-  fi
-  image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
-  sed -i -- "s/image_id: ''/image_id: '$image'/g" openstack-manager-blueprint-inputs.yaml
-
-  echo "$0: Setup flavor_id"
-  flavor=$(nova flavor-show m1.large | awk "/ id / { print \$4 }")
-  sed -i -- "s/flavor_id: ''/flavor_id: '$flavor'/g" openstack-manager-blueprint-inputs.yaml
-
-  echo "$0: Setup external_network_name"
-  sed -i -- "s/external_network_name: ''/external_network_name: '$EXTERNAL_NETWORK_NAME'/g" openstack-manager-blueprint-inputs.yaml
-
-  # By default, only the cloudify-management-router is setup as DNS server, and it was failing to resolve internet domain names, which was blocking download of needed resources
-  echo "$0: Add nameservers"
-  sed -i -- "s/#management_subnet_dns_nameservers: \[\]/management_subnet_dns_nameservers: \[8.8.8.8\]/g" openstack-manager-blueprint-inputs.yaml
-
-  echo "$0: Bootstrap the manager"
-  cfy bootstrap --install-plugins --keep-up-on-failure --task-retries=10 -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
-
-  echo "$0: install needed packages to support blueprints 'not using managed plugins'"
-  # See https://cloudifysource.atlassian.net/browse/CFY-5050
-  cfy ssh -c "sudo yum install -y gcc gcc-c++ python-devel"
-else
-  echo "$0: Prepare the Cloudify CLI prerequisites and data"
-
-  echo "Create management network"
-  if [ $(neutron net-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
-    echo "$0: vnf_mgmt network exists"
-  else
-    neutron net-create vnf_mgmt		
-    echo "$0: Create management subnet"
-    neutron subnet-create vnf_mgmt 10.0.0.0/24 --name vnf_mgmt --gateway 10.0.0.1 --enable-dhcp --allocation-pool start=10.0.0.2,end=10.0.0.254 --dns-nameserver 8.8.8.8
-  fi
-
-  echo "$0: Create router for vnf_mgmt network"
-  neutron router-create vnf_mgmt_router
-
-  echo "$0: Create router gateway for vnf_mgmt network"
-  neutron router-gateway-set vnf_mgmt_router $EXTERNAL_NETWORK_NAME
-
-  echo "$0: Add router interface for vnf_mgmt network"
-  neutron router-interface-add vnf_mgmt_router subnet=vnf_mgmt
-		
-  echo "$0: Install Cloudify OpenStack Plugin"
-#  pip install https://github.com/cloudify-cosmo/cloudify-openstack-plugin/archive/1.4.zip
-  cd /tmp/cloudify
-  if [ -d "cloudify-openstack-plugin" ]; then rm -rf cloudify-openstack-plugin; fi  
-  git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git
-  git checkout 1.4
-  echo "$0: Patch plugin.yaml to reference management network"
-  sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'vnf_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml  		
-  cd cloudify-openstack-plugin
-  python setup.py build
-  python setup.py install
-
-  echo "$0: Install Cloudify Fabric (SSH) Plugin"
-  cd /tmp/cloudify
-  if [ -d "cloudify-fabric-plugin" ]; then rm -rf cloudify-fabric-plugin; fi  
-  git clone https://github.com/cloudify-cosmo/cloudify-fabric-plugin.git
-  cd cloudify-fabric-plugin
-  git checkout 1.4
-  python setup.py build
-  python setup.py install
-  cd ..
-fi
