@@ -94,6 +94,9 @@ setup() {
 }
 
 start() {
+  echo "$0: Activate virtualenv"
+  source ~/cloudify/venv/bin/activate
+
   echo "$0: reset blueprints folder"
   if [[ -d /tmp/cloudify/blueprints ]]; then rm -rf /tmp/cloudify/blueprints; fi
   mkdir -p /tmp/cloudify/blueprints
@@ -197,6 +200,9 @@ EOF
 }
 
 stop() {
+  echo "$0: Activate virtualenv"
+  source ~/cloudify/venv/bin/activate
+
   echo "$0: setup OpenStack CLI environment"
   source /tmp/cloudify/admin-openrc.sh
 
@@ -247,7 +253,8 @@ case "$2" in
     pass
     ;;
   clean)
-    clean $1
+    echo "$0: Uninstall Cloudify"
+    bash utils/cloudify-setup.sh $1 clean
     pass
     ;;
   *)

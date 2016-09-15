@@ -246,23 +246,6 @@ stop() {
   fi
 }
 
-clean () {
-  echo "$0: setup OpenStack CLI environment"
-  source /tmp/tacker/admin-openrc.sh
-
-  if [[ "$1" == "tacker-api" ]]; then
-    echo "$0: Tacker API use is not yet implemented"
-  else
-    # Tacker CLI use
-    echo "$0: Stop and uninstall blueprint"
-    stop
- 
-    echo "$0: Uninstall Tacker"
-    bash utils/tacker-setup.sh $1 clean
-  fi
-  pass
-}
-
 forward_to_container () {
   echo "$0: pass $2 command to vHello.sh in tacker container"
   CONTAINER=$(sudo docker ps -a | awk "/tacker/ { print \$1 }")
@@ -290,7 +273,8 @@ case "$2" in
     pass
     ;;
   clean)
-    clean $1
+    echo "$0: Uninstall Tacker and test environment"
+    bash utils/tacker-setup.sh $1 clean
     pass
     ;;
   *)

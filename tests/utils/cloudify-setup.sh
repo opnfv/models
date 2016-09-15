@@ -154,7 +154,7 @@ function setup () {
   cd ~
 
   echo "$0: Install dependencies - generic"
-  pip install --upgrade pip setuptools
+  pip install --upgrade pip setuptools virtualenv
 
   echo "$0: install python-openstackclient python-glanceclient"
   pip install --upgrade python-openstackclient python-glanceclient  python-neutronclient
@@ -164,6 +164,10 @@ function setup () {
   if [ -d "~/cloudify" ]; then rm -rf ~/cloudify; fi  
   if [ -d "~/cloudify-manager" ]; then rm -rf ~/cloudify-manager; fi  
   rm ~/get-cloudify.py
+
+  echo "$0: Create virtualenv"
+  virtualenv ~/cloudify/venv
+  source ~/cloudify/venv/bin/activate
 
   echo "$0: Get Cloudify"
   wget http://gigaspaces-repository-eu.s3.amazonaws.com/org/cloudify3/get-cloudify.py
@@ -229,7 +233,7 @@ function setup () {
     sed -i -- "s/#management_subnet_dns_nameservers: \[\]/management_subnet_dns_nameservers: \[8.8.8.8\]/g" openstack-manager-blueprint-inputs.yaml
 
     echo "$0: Bootstrap the manager"
-    cfy bootstrap --install-plugins --keep-up-on-failure --task-retries=10 -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
+    cfy bootstrap --install-plugins --keep-up-on-failure --task-retries=20 -p openstack-manager-blueprint.yaml -i openstack-manager-blueprint-inputs.yaml
 
     echo "$0: install needed packages to support blueprints 'not using managed plugins'"
     # See https://cloudifysource.atlassian.net/browse/CFY-5050
@@ -261,7 +265,8 @@ function setup () {
     sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'vnf_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml  		
     cd cloudify-openstack-plugin
     python setup.py build
-    python setup.py install
+    # Use "pip install ." as "python setup.py install" does not install dependencies - resulted in an error as cloudify-openstack-plugin requires novaclient 2.26, the setup.py command installed novaclient 2.29
+    pip install .
 
     echo "$0: Install Cloudify Fabric (SSH) Plugin"
     cd /tmp/cloudify
@@ -270,9 +275,44 @@ function setup () {
     cd cloudify-fabric-plugin
     git checkout 1.4
     python setup.py build
-    python setup.py install
+    pip install .
     cd ..
   fi
+}
+
+clean () {
+  if [ "$1" == "cloudify-cli" ]; then
+    source /tmp/cloudify/admin-openrc.sh
+    if [[ -z "$(openstack user list|grep tacker)" ]]; then 
+      neutron router-gateway-clear vnf_mgmt_router
+      pid=($(neutron router-port-list vnf_mgmt_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_mgmt_router vnf_mgmt;  done
+      neutron router-delete vnf_mgmt_router
+      neutron net-delete vnf_mgmt
+    fi
+  fi
+
+  echo "$0: Delete cloudify-manager-server"
+  openstack server delete cloudify-manager-server
+  echo "$0: Delete ports"
+  pid=($(neutron port-list|grep -v "+"|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron port-delete ${id};  done
+  echo "$0: Delete floating IPs"
+  fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
+  echo "$0: Clear cloudify-management-router gateway"
+  neutron router-gateway-clear cloudify-management-router
+  echo "$0: Delete cloudify-management-router interface on cloudify-management-network"
+  neutron router-interface-delete cloudify-management-router $(neutron net-show cloudify-management-network|awk '/subnets/{print $4}')
+  echo "$0: Delete cloudify-management-router"
+  neutron router-delete cloudify-management-router
+  echo "$0: Delete cloudify-management-network"
+  neutron net-delete cloudify-management-network
+  echo "$0: Delete cloudify security group"
+  sid=($(openstack security group list|grep cloudify|awk '{print $2}')); for id in ${sid[@]}; do openstack security group delete ${id};  done
+  echo "$0: Delete cloudify keypairs"
+  openstack keypair delete cloudify-manager
+  openstack keypair delete cloudify-agent
+
+  sudo docker stop $(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
+  sudo docker rm -v $(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
 }
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
@@ -282,18 +322,11 @@ case "$2" in
     pass
     ;;
   "setup")
-    setup
+    setup $1
     pass
     ;;
   "clean")
-    source /tmp/cloudify/admin-openrc.sh
-    openstack router show vnf_mgmt_router
-    neutron router-gateway-clear vnf_mgmt_router
-    pid=($(neutron router-port-list vnf_mgmt_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_mgmt_router vnf_mgmt;  done
-    neutron router-delete vnf_mgmt_router
-    neutron net-delete vnf_mgmt
-    sudo docker stop $(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
-    sudo docker rm -v $(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
+    clean $1
     pass
     ;;
   *)
