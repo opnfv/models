@@ -121,7 +121,7 @@ app_env: {
   private_net_name: "internal",
   public_net_name: "$FLOATING_NETWORK_ID",
   flavor_name: "m1.small",
-  public_key_file: "/tmp/ansible/ansible.pem",
+  public_key_file: "/tmp/ansible/ansible.pub",
   stack_size: 4,
   volume_size: 2,
   block_device_name: "/dev/vdb",
@@ -132,22 +132,59 @@ EOF
 
   echo "$0: Setup ubuntu-xenial glance image if needed"
   if [[ -z $(openstack image list | awk "/ xenial-server / { print \$2 }") ]]; then glance --os-image-api-version 1 image-create --name xenial-server --disk-format qcow2 --location https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi 
+
+  if [[ -z $(neutron net-list | awk "/ internal / { print \$2 }") ]]; then 
+    echo "$0: Create internal network"
+    neutron net-create internal
+
+    echo "$0: Create internal subnet"
+    neutron subnet-create internal 10.0.0.0/24 --name internal --gateway 10.0.0.1 --enable-dhcp --allocation-pool start=10.0.0.2,end=10.0.0.254 --dns-nameserver 8.8.8.8
+  fi
+
+  if [[ -z $(neutron router-list | awk "/ public_router / { print \$2 }") ]]; then 
+    echo "$0: Create router"
+    neutron router-create public_router
+
+    echo "$0: Create router gateway"
+    neutron router-gateway-set public_router $FLOATING_NETWORK_NAME
+
+    echo "$0: Add router interface for internal network"
+    neutron router-interface-add public_router subnet=internal
+  fi
 }
 
 start() {
+  echo "$0: Add ssh key"
+  eval $(ssh-agent -s)
+  ssh-add /tmp/ansible/ansible.pem
+
+  echo "$0: setup OpenStack environment"
+  source /tmp/ansible/admin-openrc.sh
+
   echo "$0: invoke blueprint install via Ansible"
   cd /tmp/ansible/blueprints/lampstack
-  ansible-playbook -e "action=apply env=opnfv password=openstack" site.yml
+  ansible-playbook -e "action=apply env=opnfv password=$OS_PASSWORD" site.yml
 
   pass
 }
 
 stop() {
+  echo "$0: Add ssh key"
+  eval $(ssh-agent -s)
+  ssh-add /tmp/ansible/ansible.pem
+
+  echo "$0: setup OpenStack environment"
+  source /tmp/ansible/admin-openrc.sh
+
+  echo "$0: invoke blueprint destroy via Ansible"
+  cd /tmp/ansible/blueprints/lampstack
+  ansible-playbook -e "action=destroy env=opnfv password=$OS_PASSWORD" site.yml
+
   pass
 }
 
 forward_to_container () {
-  echo "$0: pass $1 command to vHello.sh in tacker container"
+  echo "$0: pass $1 command to vLamp_Ansible.sh in tacker container"
   CONTAINER=$(sudo docker ps -a | awk "/ansible/ { print \$1 }")
   sudo docker exec $CONTAINER /bin/bash /tmp/ansible/vLamp_Ansible.sh $1 $1
   if [ $? -eq 1 ]; then fail; fi

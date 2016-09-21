@@ -141,8 +141,8 @@ function setup () {
   pip install --upgrade shade
 
   echo "$0: Create key pair for interacting with servers via Ansible"
-  ssh-keygen -t rsa -N "" -f /tmp/ansible/ansible.pem
-  chmod 600 /tmp/ansible/ansible.pem
+  ssh-keygen -t rsa -N "" -f /tmp/ansible/ansible
+  chmod 600 /tmp/ansible/ansible
 }
 
 function clean () {
