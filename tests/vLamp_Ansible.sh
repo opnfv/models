@@ -119,7 +119,7 @@ app_env: {
   image_name: "xenial-server",
   region_name: "RegionOne",
   private_net_name: "internal",
-  public_net_name: "$FLOATING_NETWORK_ID",
+  public_net_name: "$FLOATING_NETWORK_NAME",
   flavor_name: "m1.small",
   public_key_file: "/tmp/ansible/ansible.pub",
   stack_size: 4,
@@ -129,6 +129,9 @@ app_env: {
   wp_posts: "http://wpcandy.s3.amazonaws.com/resources/postsxml.zip"
 }
 EOF
+
+  echo "$0: Setup ubuntu as ansible_user (fix for SSH connection issues?)"
+  echo "ansible_user: ubuntu" >>/tmp/ansible/blueprints/lampstack/group_vars/all.yml
 
   echo "$0: Setup ubuntu-xenial glance image if needed"
   if [[ -z $(openstack image list | awk "/ xenial-server / { print \$2 }") ]]; then glance --os-image-api-version 1 image-create --name xenial-server --disk-format qcow2 --location https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi 
@@ -155,15 +158,19 @@ EOF
 
 start() {
   echo "$0: Add ssh key"
+  chown root /tmp/ansible/ansible.pem
   eval $(ssh-agent -s)
   ssh-add /tmp/ansible/ansible.pem
 
   echo "$0: setup OpenStack environment"
   source /tmp/ansible/admin-openrc.sh
 
+  echo "$0: Clear known hosts (workaround for ssh connection issues)"
+  rm ~/.ssh/known_hosts
+
   echo "$0: invoke blueprint install via Ansible"
   cd /tmp/ansible/blueprints/lampstack
-  ansible-playbook -e "action=apply env=opnfv password=$OS_PASSWORD" site.yml
+  ansible-playbook -vvv -e "action=apply env=opnfv password=$OS_PASSWORD" -u ubuntu site.yml
 
   pass
 }
@@ -178,7 +185,7 @@ stop() {
 
   echo "$0: invoke blueprint destroy via Ansible"
   cd /tmp/ansible/blueprints/lampstack
-  ansible-playbook -e "action=destroy env=opnfv password=$OS_PASSWORD" site.yml
+  ansible-playbook -vvv -e "action=destroy env=opnfv password=$OS_PASSWORD" -u ubuntu site.yml
 
   pass
 }
