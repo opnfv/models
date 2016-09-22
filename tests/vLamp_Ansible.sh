@@ -104,6 +104,8 @@ setup () {
   get_floating_net
 
   echo "$0: create lampstack vars file for OPNFV"
+  # trusty-server is needed since xenial does not come with python pre-installed
+  # TODO: find some way to get ansible to install dependencies!
 cat >/tmp/ansible/blueprints/lampstack/vars/opnfv.yml <<EOF
 ---
 horizon_url: "http://$HORIZON_HOST"
@@ -116,7 +118,7 @@ auth: {
 }
 
 app_env: {
-  image_name: "xenial-server",
+  image_name: "trusty-server",
   region_name: "RegionOne",
   private_net_name: "internal",
   public_net_name: "$FLOATING_NETWORK_NAME",
@@ -130,11 +132,11 @@ app_env: {
 }
 EOF
 
-  echo "$0: Setup ubuntu as ansible_user (fix for SSH connection issues?)"
-  echo "ansible_user: ubuntu" >>/tmp/ansible/blueprints/lampstack/group_vars/all.yml
+  echo "$0: Disable host key checking (fix for SSH connection issues?)"
+  echo "host_key_checking = False" >>/tmp/ansible/blueprints/lampstack/ansible.cfg
 
-  echo "$0: Setup ubuntu-xenial glance image if needed"
-  if [[ -z $(openstack image list | awk "/ xenial-server / { print \$2 }") ]]; then glance --os-image-api-version 1 image-create --name xenial-server --disk-format qcow2 --location https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi 
+  echo "$0: Setup trusty-server glance image if needed"
+  if [[ -z $(openstack image list | awk "/ trusty-server / { print \$2 }") ]]; then glance --os-image-api-version 1 image-create --name trusty-server --disk-format qcow2 --location https://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img --container-format bare; fi 
 
   if [[ -z $(neutron net-list | awk "/ internal / { print \$2 }") ]]; then 
     echo "$0: Create internal network"
@@ -158,9 +160,9 @@ EOF
 
 start() {
   echo "$0: Add ssh key"
-  chown root /tmp/ansible/ansible.pem
+  chown root /tmp/ansible/ansible
   eval $(ssh-agent -s)
-  ssh-add /tmp/ansible/ansible.pem
+  ssh-add /tmp/ansible/ansible
 
   echo "$0: setup OpenStack environment"
   source /tmp/ansible/admin-openrc.sh
@@ -170,7 +172,7 @@ start() {
 
   echo "$0: invoke blueprint install via Ansible"
   cd /tmp/ansible/blueprints/lampstack
-  ansible-playbook -vvv -e "action=apply env=opnfv password=$OS_PASSWORD" -u ubuntu site.yml
+  ansible-playbook -vvv -e "action=apply env=opnfv password=$OS_PASSWORD" site.yml
 
   pass
 }
@@ -178,14 +180,14 @@ start() {
 stop() {
   echo "$0: Add ssh key"
   eval $(ssh-agent -s)
-  ssh-add /tmp/ansible/ansible.pem
+  ssh-add /tmp/ansible/ansible
 
   echo "$0: setup OpenStack environment"
   source /tmp/ansible/admin-openrc.sh
 
   echo "$0: invoke blueprint destroy via Ansible"
   cd /tmp/ansible/blueprints/lampstack
-  ansible-playbook -vvv -e "action=destroy env=opnfv password=$OS_PASSWORD" -u ubuntu site.yml
+  ansible-playbook -vvv -e "action=destroy env=opnfv password=$OS_PASSWORD" site.yml
 
   pass
 }
