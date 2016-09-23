@@ -47,10 +47,10 @@ fail() {
 function get_floating_net () {
   network_ids=($(neutron net-list|grep -v "+"|grep -v name|awk '{print $2}'))
   for id in ${network_ids[@]}; do
-      [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && floating_network_id=${id}
+      [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && FLOATING_NETWORK_ID=${id}
   done
-  if [[ $floating_network_id ]]; then 
-    floating_network_name=$(openstack network show $floating_network_id | awk "/ name / { print \$4 }")
+  if [[ $FLOATING_NETWORK_ID ]]; then 
+    FLOATING_NETWORK_NAME=$(openstack network show $FLOATING_NETWORK_ID | awk "/ name / { print \$4 }")
   else
     echo "$0: Floating network not found"
     fail
@@ -117,22 +117,16 @@ start() {
   echo "$0: setup OpenStack CLI environment"
   source /tmp/cloudify/admin-openrc.sh
 
-  echo "$0: Setup image_id"
-# image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
-  image=$(openstack image list | awk "/ xenial-server / { print \$2 }")
-  if [ -z $image ]; then 
-#   glance --os-image-api-version 1 image-create --name CentOS-7-x86_64-GenericCloud-1607 --disk-format qcow2 --location http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1607.qcow2 --container-format bare
-    glance --os-image-api-version 1 image-create --name xenial-server --disk-format qcow2 --location http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img --container-format bare
-  fi
-# image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
-  image=$(openstack image list | awk "/ xenial-server / { print \$2 }")
+  echo "$0: Setup trusty-server glance image if needed"
+  if [[ -z $(openstack image list | awk "/ trusty-server / { print \$2 }") ]]; then glance --os-image-api-version 1 image-create --name trusty-server --disk-format qcow2 --location https://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img --container-format bare; fi 
+  image=$(openstack image list | awk "/ trusty-server / { print \$2 }")
 	
   if [[ "$1" == "cloudify-manager" ]]; then 
     echo "$0: create Cloudify Manager blueprint inputs file"
     # Set host image per Cloudify agent compatibility: http://docs.getcloudify.org/3.4.0/agents/overview/
     cd /tmp/cloudify/blueprints
     cat <<EOF >vHello-inputs.yaml
-image: xenial-server
+image: trusty-server
 flavor: m1.small
 agent_user: ubuntu
 webserver_port: 8080
@@ -150,9 +144,9 @@ EOF
 
     echo "$0: create Cloudify CLI blueprint inputs file"
     cat <<EOF >vHello-inputs.yaml
-image: xenial-server
+image: trusty-server
 flavor: m1.small
-external_network_name: $floating_network_name
+external_network_name: $FLOATING_NETWORK_NAME
 webserver_port: 8080
 key_name: vHello
 ssh_key_filename: /root/.ssh/vHello.pem
@@ -185,7 +179,7 @@ EOF
   else 
     echo "$0: install local blueprint"
     # don't use --install-plugins, causes openstack plugin 1.4.1 to be rolled back to 1.4 and then an error
-    cfy local install -i vHello-inputs.yaml -p cloudify-cli-hello-world-example/blueprint.yaml --allow-custom-parameters --parameters="floating_network_name=$floating_network_name" --task-retries=10 --task-retry-interval=30
+    cfy local install -i vHello-inputs.yaml -p cloudify-cli-hello-world-example/blueprint.yaml --allow-custom-parameters --parameters="FLOATING_NETWORK_NAME=$FLOATING_NETWORK_NAME" --task-retries=10 --task-retry-interval=30
    if [ $? -eq 1 ]; then fail; fi
 
     echo "$0: get vHello server address"
