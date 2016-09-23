@@ -119,7 +119,7 @@ auth: {
 
 app_env: {
   image_name: "trusty-server",
-  region_name: "RegionOne",
+  region_name: "$OS_REGION_NAME",
   private_net_name: "internal",
   public_net_name: "$FLOATING_NETWORK_NAME",
   flavor_name: "m1.small",
