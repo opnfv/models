@@ -48,10 +48,10 @@ fail() {
 get_floating_net () {
   network_ids=($(neutron net-list|grep -v "+"|grep -v name|awk '{print $2}'))
   for id in ${network_ids[@]}; do
-      [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && floating_network_id=${id}
+      [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && FLOATING_NETWORK_ID=${id}
   done
-  if [[ $floating_network_id ]]; then
-    floating_network_name=$(openstack network show $floating_network_id | awk "/ name / { print \$4 }")
+  if [[ $FLOATING_NETWORK_ID ]]; then
+    FLOATING_NETWORK_NAME=$(openstack network show $FLOATING_NETWORK_ID | awk "/ name / { print \$4 }")
   else
     echo "$0: Floating network not found"
     exit 1
@@ -181,17 +181,17 @@ start() {
   done
 
   echo "$0: directly assign security group (unsupported in Mitaka Tacker)"
-  if [[ $(neutron security-group-list | awk "/ vHello / { print \$2 }") ]]; then neutron security-group-delete vHello; fi
-  neutron security-group-create vHello
-  neutron security-group-rule-create --direction ingress --protocol=TCP --port-range-min=22 --port-range-max=22 vHello
-  neutron security-group-rule-create --direction ingress --protocol=TCP --port-range-min=80 --port-range-max=80 vHello
+  if [[ $(openstack security group list | awk "/ vHello / { print \$2 }") ]]; then openstack security group vHello; fi
+  openstack security group create vHello
+  openstack security group rule create --ingress --protocol TCP --dst-port 22:22 vHello
+  openstack security group rule create --ingress --protocol TCP --dst-port 80:80 vHello
   openstack server add security group $SERVER_ID vHello
   openstack server add security group $SERVER_ID default
 
   echo "$0: associate floating IP"
   get_floating_net
-  fip=$(neutron floatingip-create $floating_network_name | awk "/floating_ip_address/ { print \$4 }")
-  nova floating-ip-associate $SERVER_ID $fip
+  FIP=$(openstack floating ip create $FLOATING_NETWORK_NAME | awk "/floating_ip_address/ { print \$4 }")
+  nova floating-ip-associate $SERVER_ID $FIP
 
   echo "$0: get vHello server address"
   SERVER_IP=$(openstack server show $SERVER_ID | awk "/ addresses / { print \$6 }")
