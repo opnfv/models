@@ -18,6 +18,7 @@
 # Status: this is a work in progress, under test.
 #
 # How to use:
+#   # As root on the jumphost:
 #   $ bash get_apex_undercloud_logs.sh
 
 mac=$(virsh domiflist undercloud | grep default | grep -Eo "[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+")
