@@ -39,11 +39,18 @@ fail() {
 }
 
 function setenv () {
-if [ "$dist" == "Ubuntu" ]; then
-  echo "$0: Ubuntu-based install"
-  echo "$0: Create the environment file"
-  KEYSTONE_HOST=$(juju status --format=short | awk "/keystone\/0/ { print \$3 }")
-  cat <<EOF >/tmp/tacker/admin-openrc.sh
+  echo "$0: Setup shared virtual folders and save this script there"
+  mkdir /tmp/tacker
+  cp $0 /tmp/tacker/.
+  chmod 755 /tmp/tacker/*.sh
+
+  echo "$0: Setup admin-openrc.sh"
+
+  if [ "$dist" == "Ubuntu" ]; then
+    echo "$0: Ubuntu-based install"
+    echo "$0: Create the environment file"
+    KEYSTONE_HOST=$(juju status --format=short | awk "/keystone\/0/ { print \$3 }")
+    cat <<EOF >/tmp/tacker/admin-openrc.sh
 export CONGRESS_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
 export HORIZON_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
 export KEYSTONE_HOST=$KEYSTONE_HOST
@@ -59,15 +66,15 @@ export OS_TENANT_NAME=admin
 export OS_AUTH_URL=http://$KEYSTONE_HOST:5000/v2.0
 export OS_REGION_NAME=RegionOne
 EOF
-else
-  # Centos
-  echo "$0: Centos-based install"
-  echo "$0: Setup undercloud environment so we can get overcloud Controller server address"
-  source ~/stackrc
-  echo "$0: Get address of Controller node"
-  export CONTROLLER_HOST1=$(openstack server list | awk "/overcloud-controller-0/ { print \$8 }" | sed 's/ctlplane=//g')
-  echo "$0: Create the environment file"
-  cat <<EOF >/tmp/tacker/admin-openrc.sh
+ else
+    # Centos
+    echo "$0: Centos-based install"
+    echo "$0: Setup undercloud environment so we can get overcloud Controller server address"
+    source ~/stackrc
+    echo "$0: Get address of Controller node"
+    export CONTROLLER_HOST1=$(openstack server list | awk "/overcloud-controller-0/ { print \$8 }" | sed 's/ctlplane=//g')
+    echo "$0: Create the environment file"
+    cat <<EOF >/tmp/tacker/admin-openrc.sh
 export CONGRESS_HOST=$CONTROLLER_HOST1
 export KEYSTONE_HOST=$CONTROLLER_HOST1
 export CEILOMETER_HOST=$CONTROLLER_HOST1
@@ -77,14 +84,14 @@ export NEUTRON_HOST=$CONTROLLER_HOST1
 export NOVA_HOST=$CONTROLLER_HOST1
 export HEAT_HOST=$CONTROLLER_HOST1
 EOF
-  cat ~/overcloudrc >>/tmp/tacker/admin-openrc.sh
-  source ~/overcloudrc
-  export OS_REGION_NAME=$(openstack endpoint list | awk "/ nova / { print \$4 }")
-  # sed command below is a workaound for a bug - region shows up twice for some reason
-  cat <<EOF | sed '$d' >>/tmp/tacker/admin-openrc.sh
+    cat ~/overcloudrc >>/tmp/tacker/admin-openrc.sh
+    source ~/overcloudrc
+    export OS_REGION_NAME=$(openstack endpoint list | awk "/ nova / { print \$4 }")
+    # sed command below is a workaound for a bug - region shows up twice for some reason
+    cat <<EOF | sed '$d' >>/tmp/tacker/admin-openrc.sh
 export OS_REGION_NAME=$OS_REGION_NAME
 EOF
-fi
+  fi
 source /tmp/tacker/admin-openrc.sh
 }
 
@@ -105,16 +112,9 @@ function get_external_net () {
 function create_container () {
   echo "$0: Creating docker container for Tacker installation"
   # STEP 1: Create the Tacker container and launch it
-  echo "$0: Copy this script to /tmp/tacker"
-  mkdir /tmp/tacker
-  cp $0 /tmp/tacker/.
-  chmod 755 /tmp/tacker/*.sh
-
-  echo "$0: Setup admin-openrc.sh"
-  setenv
-
   echo "$0: Setup container"
   if [ "$dist" == "Ubuntu" ]; then
+    echo "$0: Ubuntu-based install"
     # xenial is needed for python 3.5
     sudo docker pull ubuntu:xenial
     sudo service docker start
@@ -341,6 +341,7 @@ function clean () {
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 case "$2" in
   "init")
+    setenv
     uid=$(openstack user list | awk "/ tacker / { print \$2 }")
     if [[ $uid ]]; then
       echo "$0: Remove prior Tacker user etc"
