@@ -120,6 +120,8 @@ auth: {
 app_env: {
   image_name: "trusty-server",
   region_name: "$OS_REGION_NAME",
+  availability_zone: "nova",
+  validate_certs: True,
   private_net_name: "internal",
   public_net_name: "$FLOATING_NETWORK_NAME",
   flavor_name: "m1.small",
