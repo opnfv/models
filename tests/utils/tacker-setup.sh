@@ -138,6 +138,18 @@ EOF
   fi
 }
 
+function setup_client () {
+  echo "$0: Clone $1"
+  cd /tmp/tacker
+  git clone git://git.openstack.org/openstack/$1
+  cd $1
+  git checkout stable/mitaka
+
+  echo "$0: Setup $1"
+  pip install -r requirements.txt
+  python setup.py install
+}
+
 function setup () {
   echo "$0: Installing Tacker"
   # STEP 2: Install Tacker in the container
@@ -170,8 +182,25 @@ function setup () {
   echo "$0: Upgrage pip again - needs to be the latest version due to errors found in earlier testing"
   pip install --upgrade pip
 
-  echo "$0: install python-openstackclient python-glanceclient"
-  pip install --upgrade python-openstackclient python-glanceclient python-neutronclient keystonemiddleware
+  echo "$0: Clone Tacker"
+  cd /tmp/tacker
+  if [[ -d /tmp/tacker/tacker ]]; then rm -rf /tmp/tacker/tacker; fi
+  git clone git://git.openstack.org/openstack/tacker
+  cd tacker
+  git checkout stable/mitaka
+
+  echo "$0: Setup Tacker"
+  pip install -r requirements.txt
+  pip install tosca-parser
+
+  echo "$0: install stable/mitaka versions of openstack clients"
+  # Install specific versions as master diverged from mitaka
+  setup_client python-openstackclient 
+#  setup_client python-heatclient
+#  setup_client python-glanceclient
+  setup_client python-neutronclient
+  setup_client keystonemiddleware # required for keystonemiddleware.auth_token
+#  setup_client keystoneauth # Added to correct exception "EndpointNotFound: Endpoint for unknown service" in tacker/vm/plugin.py:_create_device
 
   echo "$0: Setup admin-openrc.sh"
   source /tmp/tacker/admin-openrc.sh
@@ -194,15 +223,17 @@ function setup () {
       --adminurl "http://$ip:9890/" \
       --internalurl "http://$ip:9890/" $sid
 
-  echo "$0: Clone Tacker"
-  if [[ -d /tmp/tacker/tacker ]]; then rm -rf /tmp/tacker/tacker; fi
-  git clone git://git.openstack.org/openstack/tacker
-  cd tacker
-  git checkout stable/mitaka
+#  echo "$0: Clone Tacker"
+#  cd /tmp/tacker
+#  if [[ -d /tmp/tacker/tacker ]]; then rm -rf /tmp/tacker/tacker; fi
+#  git clone git://git.openstack.org/openstack/tacker
+#  cd tacker
+#  git checkout stable/mitaka
 
   echo "$0: Setup Tacker"
-  pip install -r requirements.txt
-  pip install tosca-parser
+#  pip install -r requirements.txt
+#  pip install tosca-parser
+  cd /tmp/tacker/tacker
   python setup.py install
   mkdir /var/log/tacker
 

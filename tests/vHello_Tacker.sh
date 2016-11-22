@@ -135,6 +135,9 @@ setup () {
   cp blueprints/tosca-vnfd-hello-world-tacker/vHello.pem /tmp/tacker
   chmod 600 /tmp/tacker/vHello.pem
 
+  echo "$0: setup OpenStack CLI environment"
+  source /tmp/tacker/admin-openrc.sh
+
   echo "$0: Setup image_id"
   image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
   if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --file /tmp/xenial-server-cloudimg-amd64-disk1.img --container-format bare; fi 
