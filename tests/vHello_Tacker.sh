@@ -204,31 +204,6 @@ start() {
   echo "$0: wait 30 seconds for vHello server to startup"
   sleep 30
 
-  echo "$0: start vHello web server"
-  chown root /tmp/tacker/vHello.pem
-  ssh -i /tmp/tacker/vHello.pem -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$SERVER_IP <<EOF
-cat << EOM | sudo tee /home/ubuntu/index.html
-<!DOCTYPE html>
-<html>
-<head>
-<title>Hello World!</title>
-<meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1"/>
-<style>
-body { width: 100%; background-color: white; color: black; padding: 0px; margin: 0px; font-family: sans-serif; font-size:100%; }
-</style>
-</head>
-<body>
-Hello World!<br>
-<a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
-</body></html>
-EOM
-nohup sudo python3 -m http.server 80 > /dev/null 2>&1 &
-exit
-EOF
-
-  echo "$0: wait 10 seconds for vHello web server to startup"
-  sleep 10
-
   echo "$0: verify vHello server is running"
   apt-get install -y curl
   if [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]]; then fail; fi
