@@ -176,8 +176,9 @@ start() {
   done
 
   echo "$0: directly set port security on ports (bug/unsupported in Mitaka Tacker?)"
-  HEAT_ID=$(tacker vnf-show hello-world-tacker | awk "/instance_id/ { print \$4 }")
-  SERVER_ID=$(openstack stack resource list $HEAT_ID | awk "/VDU1 / { print \$4 }")
+#  HEAT_ID=$(tacker vnf-show hello-world-tacker | awk "/instance_id/ { print \$4 }")
+#  SERVER_ID=$(openstack stack resource list $HEAT_ID | awk "/VDU1 / { print \$4 }")
+  SERVER_ID=$(openstack server list | awk "/VDU1/ { print \$2 }")
   id=($(neutron port-list|grep -v "+"|grep -v name|awk '{print $2}'))
   for id in ${id[@]}; do
     if [[ $(neutron port-show $id|grep $SERVER_ID) ]]; then neutron port-update ${id} --port-security-enabled=True; fi
