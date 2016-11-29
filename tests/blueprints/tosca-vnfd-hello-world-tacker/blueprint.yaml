@@ -27,8 +27,11 @@ topology_template:
         config_drive: true
         user_data_format: RAW
         user_data: |
-          #!/bin/sh
+          #!/bin/bash
+          set -x
+          sudo mount /dev/sr0 /mnt/
           cd /tmp
+          id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json)
           cat << EOM | sudo tee index.html
           <!DOCTYPE html>
           <html>
@@ -42,6 +45,12 @@ topology_template:
           <body>
           Hello World!<br>
           <a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
+          <div>
+          <p>Instance ID fom config drive file /mnt/openstack/latest/meta_data.json></p>
+          <pre>
+          $id
+          </pre>
+          </div>
           </body></html>
           EOM
           sudo python3 -m http.server 80

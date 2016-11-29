@@ -132,7 +132,7 @@ setup () {
   if [ ! -f /tmp/xenial-server-cloudimg-amd64-disk1.img ]; then 
     wget -O /tmp/xenial-server-cloudimg-amd64-disk1.img  http://artifacts.opnfv.org/models/images/xenial-server-cloudimg-amd64-disk1.img
   fi
-  cp blueprints/tosca-vnfd-hello-world-tacker/vHello.pem /tmp/tacker
+  cp ~/vHello.pem /tmp/tacker
   chmod 600 /tmp/tacker/vHello.pem
 
   echo "$0: setup OpenStack CLI environment"
@@ -207,6 +207,11 @@ start() {
   echo "$0: verify vHello server is running"
   apt-get install -y curl
   if [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]]; then fail; fi
+
+  echo "$0: verify contents of config drive are included in web page"
+  id=$(curl $SERVER_URL | awk "/uuid/ { print \$2 }")
+  if [[ -z "$id" ]]; then fail; fi
+
 }
 
 stop() {
