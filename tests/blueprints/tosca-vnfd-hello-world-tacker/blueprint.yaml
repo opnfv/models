@@ -12,7 +12,7 @@ topology_template:
       artifacts:
         VNFImage:
           type: tosca.artifacts.Deployment.Image.VM
-          file: http://artifacts.opnfv.org/models/images/xenial-server-cloudimg-amd64-disk1.img
+          file: http://cloud-images.ubuntu.com/releases/xenial/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img
       capabilities:
         nfv_compute:
           properties:
@@ -29,6 +29,12 @@ topology_template:
         user_data: |
           #!/bin/bash
           set -x
+          mkdir /home/ubuntu
+          mkdir /home/ubuntu/.ssh
+          cat << EOM >/home/ubuntu/.ssh/authorized_keys
+          <pubkey>
+          EOM
+          chown -R ubuntu /home/ubuntu
           sudo mount /dev/sr0 /mnt/
           cd /tmp
           id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json)

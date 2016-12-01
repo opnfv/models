@@ -26,29 +26,36 @@
 #   setup: Setup of Tacker in the docker container
 #   clean: Clean
 
+trap 'fail' ERR
+
 pass() {
-  echo "$0: Hooray!"
-  set +x #echo off
+  echo "$0: $(date) Hooray!"
+  end=`date +%s`
+  runtime=$((end-start))
+  echo "$0: $(date) Duration = $runtime seconds"
   exit 0
 }
 
 fail() {
-  echo "$0: Failed!"
-  set +x
+  echo "$0: $(date) Test Failed!"
+  end=`date +%s`
+  runtime=$((end-start))
+  runtime=$((runtime/60))
+  echo "$0: $(date) Duration = $runtime seconds"
   exit 1
 }
 
 function setenv () {
-  echo "$0: Setup shared virtual folders and save this script there"
+  echo "$0: $(date) Setup shared virtual folders and save this script there"
   mkdir /tmp/tacker
   cp $0 /tmp/tacker/.
   chmod 755 /tmp/tacker/*.sh
 
-  echo "$0: Setup admin-openrc.sh"
+  echo "$0: $(date) Setup admin-openrc.sh"
 
   if [ "$dist" == "Ubuntu" ]; then
-    echo "$0: Ubuntu-based install"
-    echo "$0: Create the environment file"
+    echo "$0: $(date) Ubuntu-based install"
+    echo "$0: $(date) Create the environment file"
     KEYSTONE_HOST=$(juju status --format=short | awk "/keystone\/0/ { print \$3 }")
     cat <<EOF >/tmp/tacker/admin-openrc.sh
 export CONGRESS_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
@@ -68,12 +75,12 @@ export OS_REGION_NAME=RegionOne
 EOF
  else
     # Centos
-    echo "$0: Centos-based install"
-    echo "$0: Setup undercloud environment so we can get overcloud Controller server address"
+    echo "$0: $(date) Centos-based install"
+    echo "$0: $(date) Setup undercloud environment so we can get overcloud Controller server address"
     source ~/stackrc
-    echo "$0: Get address of Controller node"
+    echo "$0: $(date) Get address of Controller node"
     export CONTROLLER_HOST1=$(openstack server list | awk "/overcloud-controller-0/ { print \$8 }" | sed 's/ctlplane=//g')
-    echo "$0: Create the environment file"
+    echo "$0: $(date) Create the environment file"
     cat <<EOF >/tmp/tacker/admin-openrc.sh
 export CONGRESS_HOST=$CONTROLLER_HOST1
 export KEYSTONE_HOST=$CONTROLLER_HOST1
@@ -104,17 +111,17 @@ function get_external_net () {
     EXTERNAL_NETWORK_NAME=$(openstack network show $ext_net_id | awk "/ name / { print \$4 }")
     EXTERNAL_SUBNET_ID=$(openstack network show $EXTERNAL_NETWORK_NAME | awk "/ subnets / { print \$4 }")
   else
-    echo "$0: External network not found"
+    echo "$0: $(date) External network not found"
     exit 1
   fi
 }
 
 function create_container () {
-  echo "$0: Creating docker container for Tacker installation"
+  echo "$0: $(date) Creating docker container for Tacker installation"
   # STEP 1: Create the Tacker container and launch it
-  echo "$0: Setup container"
+  echo "$0: $(date) Setup container"
   if [ "$dist" == "Ubuntu" ]; then
-    echo "$0: Ubuntu-based install"
+    echo "$0: $(date) Ubuntu-based install"
     # xenial is needed for python 3.5
     sudo docker pull ubuntu:xenial
     sudo service docker start
@@ -139,10 +146,10 @@ EOF
 }
 
 function setup () {
-  echo "$0: Installing Tacker"
+  echo "$0: $(date) Installing Tacker"
   # STEP 2: Install Tacker in the container
   # Per http://docs.openstack.org/developer/tacker/install/manual_installation.html
-  echo "$0: Install dependencies - OS specific"
+  echo "$0: $(date) Install dependencies - OS specific"
   if [ "$dist" == "Ubuntu" ]; then
     apt-get update
     apt-get install -y python
@@ -164,29 +171,29 @@ function setup () {
 
   cd /tmp/tacker
 
-  echo "$0: create Tacker database"
+  echo "$0: $(date) create Tacker database"
   mysql --user=root --password=$MYSQL_PASSWORD -e "CREATE DATABASE tacker; GRANT ALL PRIVILEGES ON tacker.* TO 'root@localhost' IDENTIFIED BY '"$MYSQL_PASSWORD"'; GRANT ALL PRIVILEGES ON tacker.* TO 'root'@'%' IDENTIFIED BY '"$MYSQL_PASSWORD"';"
 
-  echo "$0: Upgrage pip again - needs to be the latest version due to errors found in earlier testing"
+  echo "$0: $(date) Upgrage pip again - needs to be the latest version due to errors found in earlier testing"
   pip install --upgrade pip
 
-  echo "$0: install python-openstackclient python-glanceclient"
+  echo "$0: $(date) install python-openstackclient python-glanceclient"
   pip install --upgrade python-openstackclient python-glanceclient python-neutronclient keystonemiddleware
 
-  echo "$0: Setup admin-openrc.sh"
+  echo "$0: $(date) Setup admin-openrc.sh"
   source /tmp/tacker/admin-openrc.sh
 
-  echo "$0: Setup Tacker user in OpenStack"
+  echo "$0: $(date) Setup Tacker user in OpenStack"
   service_project=$(openstack project list | awk "/service/ { print \$4 }")
   openstack user create --project $service_project --password tacker tacker
   openstack role add --project $service_project --user tacker admin
 
-  echo "$0: Create Tacker service in OpenStack"
+  echo "$0: $(date) Create Tacker service in OpenStack"
   sid=$(openstack service list | awk "/ tacker / { print \$2 }")
   openstack service create --name tacker --description "Tacker Project" nfv-orchestration
   sid=$(openstack service list | awk "/ tacker / { print \$2 }")
 
-  echo "$0: Create Tacker service endpoint in OpenStack"
+  echo "$0: $(date) Create Tacker service endpoint in OpenStack"
   ip=$(ip addr | awk "/ global eth0/ { print \$2 }" | sed -- 's/\/16//')
   region=$(openstack endpoint list | awk "/ nova / { print \$4 }")
   openstack endpoint create --region $region \
@@ -194,25 +201,25 @@ function setup () {
       --adminurl "http://$ip:9890/" \
       --internalurl "http://$ip:9890/" $sid
 
-  echo "$0: Clone Tacker"
+  echo "$0: $(date) Clone Tacker"
   if [[ -d /tmp/tacker/tacker ]]; then rm -rf /tmp/tacker/tacker; fi
   git clone git://git.openstack.org/openstack/tacker
   cd tacker
   git checkout stable/mitaka
 
-  echo "$0: Setup Tacker"
+  echo "$0: $(date) Setup Tacker"
   pip install -r requirements.txt
   pip install tosca-parser
   python setup.py install
   mkdir /var/log/tacker
 
   # Following lines apply to master and not stable/mitaka
-  #echo "$0: install tox"
+  #echo "$0: $(date) install tox"
   #pip install tox
-  #echo "$0: generate tacker.conf.sample"
+  #echo "$0: $(date) generate tacker.conf.sample"
   #tox -e config-gen
 
-  echo "$0: Update tacker.conf values"
+  echo "$0: $(date) Update tacker.conf values"
   mkdir /usr/local/etc/tacker
   cp etc/tacker/tacker.conf /usr/local/etc/tacker/tacker.conf
   sed -i -- 's/# auth_strategy = keystone/auth_strategy = keystone/' /usr/local/etc/tacker/tacker.conf
@@ -232,11 +239,13 @@ function setup () {
   sed -i -- "s~# api_paste_config = api-paste.ini~api_paste_config = /tmp/tacker/tacker/etc/tacker/api-paste.ini~" /usr/local/etc/tacker/tacker.conf
   sed -i -- "s/# bind_host = 0.0.0.0/bind_host = $ip/" /usr/local/etc/tacker/tacker.conf
   sed -i -- "s/# bind_port = 8888/bind_port = 9890/" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "s/stack_retries = 60/stack_retries = 10/" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "s/stack_retry_wait = 5/stack_retry_wait = 60/" /usr/local/etc/tacker/tacker.conf
 
-  echo "$0: Populate Tacker database"
+  echo "$0: $(date) Populate Tacker database"
   /usr/local/bin/tacker-db-manage --config-file /usr/local/etc/tacker/tacker.conf upgrade head
 
-  echo "$0: Install Tacker Client"
+  echo "$0: $(date) Install Tacker Client"
   cd /tmp/tacker
   if [[ -d /tmp/tacker/python-tackerclient ]]; then rm -rf /tmp/tacker/python-tackerclient; fi
   git clone https://github.com/openstack/python-tackerclient
@@ -245,7 +254,7 @@ function setup () {
   python setup.py install
 
   # deferred until its determined how to get this to Horizon
-  #echo "$0: Install Tacker Horizon plugin"
+  #echo "$0: $(date) Install Tacker Horizon plugin"
   #cd /tmp/tacker
   #git clone https://github.com/openstack/tacker-horizon
   #cd tacker-horizon
@@ -254,13 +263,13 @@ function setup () {
   #cp openstack_dashboard_extensions/* /usr/share/openstack-dashboard/openstack_dashboard/enabled/
   #service apache2 restart
 
-  echo "$0: Start the Tacker Server"
+  echo "$0: $(date) Start the Tacker Server"
   nohup python /usr/local/bin/tacker-server --config-file /usr/local/etc/tacker/tacker.conf --log-file /var/log/tacker/tacker.log & disown
 
-  echo "$0: Wait 30 seconds for Tacker server to come online"
+  echo "$0: $(date) Wait 30 seconds for Tacker server to come online"
   sleep 30
 
-  echo "$0: Register default VIM"
+  echo "$0: $(date) Register default VIM"
   cd /tmp/tacker
   cat <<EOF >vim-config.yaml 
 auth_url: $OS_AUTH_URL
@@ -277,43 +286,43 @@ EOF
 function setup_test_environment () {
   echo "Create management network"
   if [ $(neutron net-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
-    echo "$0: vnf_mgmt network exists"
+    echo "$0: $(date) vnf_mgmt network exists"
   else
     neutron net-create vnf_mgmt		
-    echo "$0: Create management subnet"
+    echo "$0: $(date) Create management subnet"
     neutron subnet-create vnf_mgmt 192.168.200.0/24 --name vnf_mgmt --gateway 192.168.200.1 --enable-dhcp --allocation-pool start=192.168.200.2,end=192.168.200.254 --dns-nameserver 8.8.8.8
   fi
 
-  echo "$0: Create router for vnf_mgmt network"
+  echo "$0: $(date) Create router for vnf_mgmt network"
   if [ $(neutron router-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
-    echo "$0: vnf_mgmt router exists"
+    echo "$0: $(date) vnf_mgmt router exists"
   else
     neutron router-create vnf_mgmt_router
-    echo "$0: Create router gateway for vnf_mgmt network"
+    echo "$0: $(date) Create router gateway for vnf_mgmt network"
     get_external_net
     neutron router-gateway-set vnf_mgmt_router $EXTERNAL_NETWORK_NAME
-    echo "$0: Add router interface for vnf_mgmt network"
+    echo "$0: $(date) Add router interface for vnf_mgmt network"
     neutron router-interface-add vnf_mgmt_router subnet=vnf_mgmt
   fi
 
   echo "Create private network"
   if [ $(neutron net-list | awk "/ vnf_private / { print \$2 }") ]; then
-    echo "$0: vnf_private network exists"
+    echo "$0: $(date) vnf_private network exists"
   else
     neutron net-create vnf_private		
-    echo "$0: Create private subnet"
+    echo "$0: $(date) Create private subnet"
     neutron subnet-create vnf_private 192.168.201.0/24 --name vnf_private --gateway 192.168.201.1 --enable-dhcp --allocation-pool start=192.168.201.2,end=192.168.201.254 --dns-nameserver 8.8.8.8
   fi
 
-  echo "$0: Create router for vnf_private network"
+  echo "$0: $(date) Create router for vnf_private network"
   if [ $(neutron router-list | awk "/ vnf_private / { print \$2 }") ]; then
-    echo "$0: vnf_private router exists"
+    echo "$0: $(date) vnf_private router exists"
   else
     neutron router-create vnf_private_router
-    echo "$0: Create router gateway for vnf_private network"
+    echo "$0: $(date) Create router gateway for vnf_private network"
     get_external_net
     neutron router-gateway-set vnf_private_router $EXTERNAL_NETWORK_NAME
-    echo "$0: Add router interface for vnf_private network"
+    echo "$0: $(date) Add router interface for vnf_private network"
     neutron router-interface-add vnf_private_router subnet=vnf_private
   fi
 }
@@ -338,13 +347,14 @@ function clean () {
   sudo docker rm -v $(sudo docker ps -a | awk "/tacker/ { print \$1 }")
 }
 
+start=`date +%s`
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 case "$2" in
   "init")
     setenv
     uid=$(openstack user list | awk "/ tacker / { print \$2 }")
     if [[ $uid ]]; then
-      echo "$0: Remove prior Tacker user etc"
+      echo "$0: $(date) Remove prior Tacker user etc"
       openstack user delete tacker
       openstack service delete tacker
       # Note: deleting the service deletes the endpoint
