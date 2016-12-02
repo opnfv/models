@@ -49,6 +49,7 @@
 # test blueprint etc are prepared in a shared virtual folder /tmp/tacker.
 # After step 2, the VNF is running and verified.
 # After step 3, the VNF is deleted and the system returned to step 1 post-state.
+# After step 4, the system returned to test pre-state.
 #
 # Cleanup: bash vHello_Tacker.sh tacker-cli clean
 #
