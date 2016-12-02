@@ -23,8 +23,34 @@
 # as extended for testing of more Tacker-supported features as of OpenStack 
 # Mitaka.
 #
-# Prequisites: 
+# Pre-State: 
+# models-joid-001 | models-apex-001 (installation of OPNFV system)
 #
+# Test Steps and Assertions:
+# 1) bash vHello_Tacker.sh tacker-cli setup|start|run|stop|clean]
+#   models-tacker-001 (Tacker installation in a docker container on the jumphost)
+#   models-nova-001 (Keypair creation)
+# 2) bash vHello_Tacker.sh tacker-cli start
+#   models-tacker-002 (VNFD creation)
+#   models-tacker-003 (VNF creation)
+#   models-tacker-vnfd-001 (config_drive creation)
+#   models-tacker-vnfd-002 (artifacts creation)
+#   models-tacker-vnfd-003 (user_data creation)
+#   models-vhello-001 (vHello VNF creation)
+# 3) bash vHello_Tacker.sh tacker-cli stop
+#   models-tacker-004 (VNF deletion)
+#   models-tacker-005 (VNFD deletion)
+#   models-tacker-vnfd-004 (artifacts deletion)
+# 4) bash vHello_Tacker.sh tacker-cli clean
+#   TODO: add assertions
+#
+# Post-State: 
+# After step 1, Tacker is installed and active in a docker container, and the 
+# test blueprint etc are prepared in a shared virtual folder /tmp/tacker.
+# After step 2, the VNF is running and verified.
+# After step 3, the VNF is deleted and the system returned to step 1 post-state.
+#
+# Cleanup: bash vHello_Tacker.sh tacker-cli clean
 #
 # How to use:
 #   $ git clone https://gerrit.opnfv.org/gerrit/models
