@@ -13,20 +13,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# What this is: Setup script for OpenStack Clients running in  
-# an Unbuntu Xenial docker container.
+# What this is: Setup script for OpenStack Clients (OSC) running in  
+# an Unbuntu Xenial docker container. You can use this script to isolate the 
+# OSC from your host
 #
 # Status: this is a work in progress, under test.
 #
 # How to use:
-#   $ bash osclient.sh setup|run 
-#   setup: install the OpenStack CLI clients in the container
-#     bash osclient.sh setup credential_script [branch]
+#   $ bash osclient.sh setup|run (see detailed parameters below)
+#   setup: install the OpenStack CLI clients in the container.
+#     $ bash osclient.sh setup credential_script [branch]
 #     credential_script: OpenStack CLI env setup script (e.g. admin-openrc.sh)
 #     branch: git repo branch to install (e.g. stable/newton)
 #   run: run a command in the container
-#     bash osclient.sh run command
-#     command: command to run, in quotes
+#     $ bash osclient.sh run command
+#     command: command to run, in quotes e.g. 
+#       bash osclient.sh run "openstack service list"
+#       bash osclient.sh run "bash mytest.sh"
 
 trap 'fail' ERR
 
@@ -163,13 +166,15 @@ EOF
     pass
     ;;
   *)
-    echo "$ bash osclient.sh setup|run"
-    echo "setup: install the OpenStack CLI clients in the container"
-    echo "  $ bash osclient.sh setup credential_script [branch]"
-    echo "  credential_script: OpenStack CLI env setup script (e.g. admin-openrc.sh)"
-    echo "  branch: git repo branch to install (e.g. stable/newton)"
-    echo "run: run a command in the container"
-    echo "  $ bash osclient.sh run command"
-    echo "  command: command to run, in quotes"
-    fail
+echo "$ bash osclient.sh setup|run (see detailed parameters below)"
+echo "  setup: install the OpenStack CLI clients in the container."
+echo "    $ bash osclient.sh setup credential_script [branch]"
+echo "    credential_script: OpenStack CLI env setup script (e.g. admin-openrc.sh)"
+echo "    branch: git repo branch to install (e.g. stable/newton)"
+echo "  run: run a command in the container"
+echo "    $ bash osclient.sh run command"
+echo "    command: command to run, in quotes e.g."
+echo "      bash osclient.sh run \"openstack service list\""
+echo "      bash osclient.sh run \"bash mytest.sh\""
+fail
 esac
