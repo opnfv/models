@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "5ac10518_0188d1e5",
+        "filename": "tests/utils/osclient.sh",
+        "patchSetId": 2
+      },
+      "lineNbr": 19,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-17T17:27:17Z",
+      "side": 1,
+      "message": "You can then then modify your tests scripts on your host and run them using the OSC container rather than moving the test scripts to DevStack or an OpenStack installation (see below). You can also attach to the OSC container. Enter \"sudo docker attach osclient\" then hit enter twice and you will be in the container as root (there are no other users). \nOnce in the container, you can \"source /tmp/osclient/admin-openrc.sh\" and use any OSC commands you want.",
+      "revId": "4ade335a41e4b5a5ee12d0ab8f9c298ef21a2d13",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    }
+  ]
+}
