@@ -1,0 +1,141 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "5ac10518_a173fd7e",
+        "filename": "tests/utils/osclient.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 18,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-17T16:10:11Z",
+      "side": 1,
+      "message": "the benefit of having the OSC installed in a container on the host is what?",
+      "revId": "460c102cc75a1b1d07caa055d80dd39135e98f5d",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ac10518_21606da4",
+        "filename": "tests/utils/osclient.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 24,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-17T16:10:11Z",
+      "side": 1,
+      "message": "in a container on the host",
+      "range": {
+        "startLine": 24,
+        "startChar": 45,
+        "endLine": 24,
+        "endChar": 62
+      },
+      "revId": "460c102cc75a1b1d07caa055d80dd39135e98f5d",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ac10518_416339b1",
+        "filename": "tests/utils/osclient.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 25,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-17T16:10:11Z",
+      "side": 1,
+      "message": "\u003cpath to credential script\u003e",
+      "range": {
+        "startLine": 25,
+        "startChar": 31,
+        "endLine": 25,
+        "endChar": 48
+      },
+      "revId": "460c102cc75a1b1d07caa055d80dd39135e98f5d",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ac10518_e15905ff",
+        "filename": "tests/utils/osclient.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 26,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-17T16:10:11Z",
+      "side": 1,
+      "message": "obtained from the OpenStack Dashboard: Project-\u003eAccess-\u003eSecurity-\u003eAPI",
+      "range": {
+        "startLine": 26,
+        "startChar": 77,
+        "endLine": 26,
+        "endChar": 78
+      },
+      "revId": "460c102cc75a1b1d07caa055d80dd39135e98f5d",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ac10518_015d31e9",
+        "filename": "tests/utils/osclient.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 27,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-17T16:10:11Z",
+      "side": 1,
+      "message": "How about adding a complete example here? As in, for example, if the admin-openrc.sh file is in the same directory as osclient.sh and you want to use stable/newton:  bash osclient.sh setup admin-openrc.sh stable/newton",
+      "revId": "460c102cc75a1b1d07caa055d80dd39135e98f5d",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ac10518_616d1598",
+        "filename": "tests/utils/osclient.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 33,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-17T16:10:11Z",
+      "side": 1,
+      "message": "another point - how do the user delete the container from the host?",
+      "revId": "460c102cc75a1b1d07caa055d80dd39135e98f5d",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ac10518_c16e4996",
+        "filename": "tests/utils/osclient.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 169,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-17T16:10:11Z",
+      "side": 1,
+      "message": "are you going to update this section to reflect the changes to the instructions at the top?",
+      "revId": "460c102cc75a1b1d07caa055d80dd39135e98f5d",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    }
+  ]
+}
