@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "5ac10518_6096654e",
+        "filename": "tests/utils/tacker-setup.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 18,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-23T16:26:39Z",
+      "side": 1,
+      "message": "grammer nit: a not an",
+      "range": {
+        "startLine": 18,
+        "startChar": 24,
+        "endLine": 18,
+        "endChar": 26
+      },
+      "revId": "97853e38cf85439d7a598051e43d42d74b7c011e",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ac10518_c0af1993",
+        "filename": "tests/vHello_Tacker.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 27,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-23T16:26:39Z",
+      "side": 1,
+      "message": "grammer nit: a not an",
+      "range": {
+        "startLine": 27,
+        "startChar": 58,
+        "endLine": 27,
+        "endChar": 60
+      },
+      "revId": "97853e38cf85439d7a598051e43d42d74b7c011e",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    }
+  ]
+}
