@@ -250,8 +250,10 @@ function setup () {
   # (not referenced) signing_dir = /var/cache/tacker
   # (not referenced) cafile = /opt/stack/data/ca-bundle.pem
   # (not referenced) auth_uri = http://15.184.66.78/identity
+  # auth_uri is required for keystonemiddleware.auth_token use of public identity endpoint
   cat >>/usr/local/etc/tacker/tacker.conf <<EOF
 [keystone_authtoken]
+auth_uri = $(openstack endpoint show keystone | awk "/ publicurl / { print \$4 }")
 auth_url = $(openstack endpoint show keystone | awk "/ internalurl / { print \$4 }")
 project_domain_name = Default
 project_name = $service_project
