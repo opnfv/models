@@ -14,14 +14,13 @@
 # limitations under the License.
 #
 # What this is: Setup script for the OpenStack Tacker VNF Manager starting from 
-# an Unbuntu Xenial docker container.
+# an Unbuntu Xenial docker container. This script is intended to be in an 
+# OPNFV environment, or an plain OpenStack environment (e.g. Devstack).
 #
 # Status: this is a work in progress, under test.
 #
 # How to use:
-#   $ bash tacker-setup.sh [tacker-cli|tacker-api] [init|setup|clean]
-#   tacker-cli: use Tacker CLI
-#   tacker-api: use Tacker RESTful API
+#   $ bash tacker-setup.sh [init|setup|clean] 
 #   init: Initialize docker container
 #   setup: Setup of Tacker in the docker container
 #   clean: Clean
@@ -52,54 +51,7 @@ function setenv () {
   chmod 755 /tmp/tacker/*.sh
 
   echo "$0: $(date) Setup admin-openrc.sh"
-
-  if [ "$dist" == "Ubuntu" ]; then
-    echo "$0: $(date) Ubuntu-based install"
-    echo "$0: $(date) Create the environment file"
-    KEYSTONE_HOST=$(juju status --format=short | awk "/keystone\/0/ { print \$3 }")
-    cat <<EOF >/tmp/tacker/admin-openrc.sh
-export CONGRESS_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
-export HORIZON_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
-export KEYSTONE_HOST=$KEYSTONE_HOST
-export CEILOMETER_HOST=$(juju status --format=short | awk "/ceilometer\/0/ { print \$3 }")
-export CINDER_HOST=$(juju status --format=short | awk "/cinder\/0/ { print \$3 }")
-export GLANCE_HOST=$(juju status --format=short | awk "/glance\/0/ { print \$3 }")
-export NEUTRON_HOST=$(juju status --format=short | awk "/neutron-api\/0/ { print \$3 }")
-export NOVA_HOST=$(juju status --format=short | awk "/nova-cloud-controller\/0/ { print \$3 }")
-export HEAT_HOST=$(juju status --format=short | awk "/heat\/0/ { print \$3 }")
-export OS_USERNAME=admin
-export OS_PASSWORD=openstack
-export OS_TENANT_NAME=admin
-export OS_AUTH_URL=http://$KEYSTONE_HOST:5000/v2.0
-export OS_REGION_NAME=RegionOne
-EOF
- else
-    # Centos
-    echo "$0: $(date) Centos-based install"
-    echo "$0: $(date) Setup undercloud environment so we can get overcloud Controller server address"
-    source ~/stackrc
-    echo "$0: $(date) Get address of Controller node"
-    export CONTROLLER_HOST1=$(openstack server list | awk "/overcloud-controller-0/ { print \$8 }" | sed 's/ctlplane=//g')
-    echo "$0: $(date) Create the environment file"
-    cat <<EOF >/tmp/tacker/admin-openrc.sh
-export CONGRESS_HOST=$CONTROLLER_HOST1
-export KEYSTONE_HOST=$CONTROLLER_HOST1
-export CEILOMETER_HOST=$CONTROLLER_HOST1
-export CINDER_HOST=$CONTROLLER_HOST1
-export GLANCE_HOST=$CONTROLLER_HOST1
-export NEUTRON_HOST=$CONTROLLER_HOST1
-export NOVA_HOST=$CONTROLLER_HOST1
-export HEAT_HOST=$CONTROLLER_HOST1
-EOF
-    cat ~/overcloudrc >>/tmp/tacker/admin-openrc.sh
-    source ~/overcloudrc
-    export OS_REGION_NAME=$(openstack endpoint list | awk "/ nova / { print \$4 }")
-    # sed command below is a workaound for a bug - region shows up twice for some reason
-    cat <<EOF | sed '$d' >>/tmp/tacker/admin-openrc.sh
-export OS_REGION_NAME=$OS_REGION_NAME
-EOF
-  fi
-source /tmp/tacker/admin-openrc.sh
+  source /tmp/tacker/admin-openrc.sh
 }
 
 function get_external_net () {
@@ -145,6 +97,17 @@ EOF
   fi
 }
 
+
+install_client () {
+  echo "$0: $(date) Install $1"
+  git clone https://github.com/openstack/$1.git
+  cd $1
+  if [ $# -eq 2 ]; then git checkout $2; fi
+  pip install -r requirements.txt
+  pip install .
+  cd ..
+}
+
 function setup () {
   echo "$0: $(date) Installing Tacker"
   # STEP 2: Install Tacker in the container
@@ -161,6 +124,8 @@ function setup () {
     apt-get install -y apg
     apt-get install -y libffi-dev
     apt-get install -y libssl-dev
+    # newton: tacker uses ping for monitoring VIM (not in default docker containers)
+    apt-get install -y inetutils-ping
     export MYSQL_PASSWORD=$(/usr/bin/apg -n 1 -m 16 -c cl_seed)
     echo $MYSQL_PASSWORD >~/mysql
     debconf-set-selections <<< 'mysql-server mysql-server/root_password password '$MYSQL_PASSWORD
@@ -172,16 +137,27 @@ function setup () {
   cd /tmp/tacker
 
   echo "$0: $(date) create Tacker database"
-  mysql --user=root --password=$MYSQL_PASSWORD -e "CREATE DATABASE tacker; GRANT ALL PRIVILEGES ON tacker.* TO 'root@localhost' IDENTIFIED BY '"$MYSQL_PASSWORD"'; GRANT ALL PRIVILEGES ON tacker.* TO 'root'@'%' IDENTIFIED BY '"$MYSQL_PASSWORD"';"
+  mysql --user=root --password=$MYSQL_PASSWORD -e "CREATE DATABASE tacker; GRANT ALL PRIVILEGES ON tacker.* TO 'root@localhost' IDENTIFIED BY '"$MYSQL_PASSWORD"'; GRANT ALL PRIVILEGES ON tacker.* TO 'tacker'@'%' IDENTIFIED BY '"$MYSQL_PASSWORD"';"
 
   echo "$0: $(date) Upgrage pip again - needs to be the latest version due to errors found in earlier testing"
   pip install --upgrade pip
 
-  echo "$0: $(date) install python-openstackclient python-glanceclient"
-  pip install --upgrade python-openstackclient python-glanceclient python-neutronclient keystonemiddleware
+  echo "$0: $(date) Install OpenStack clients"
+  install_client python-openstackclient $branch
+  install_client python-neutronclient $branch
+
+#  pip install --upgrade python-openstackclient python-glanceclient python-neutronclient keystonemiddleware
 
   echo "$0: $(date) Setup admin-openrc.sh"
   source /tmp/tacker/admin-openrc.sh
+
+  uid=$(openstack user list | awk "/ tacker / { print \$2 }")
+  if [[ $uid ]]; then
+    echo "$0: $(date) Remove prior Tacker user etc"
+    openstack user delete tacker
+    openstack service delete tacker
+    # Note: deleting the service deletes the endpoint
+  fi
 
   echo "$0: $(date) Setup Tacker user in OpenStack"
   service_project=$(openstack project list | awk "/service/ { print \$4 }")
@@ -205,7 +181,7 @@ function setup () {
   if [[ -d /tmp/tacker/tacker ]]; then rm -rf /tmp/tacker/tacker; fi
   git clone git://git.openstack.org/openstack/tacker
   cd tacker
-  git checkout stable/mitaka
+  git checkout stable/newton
 
   echo "$0: $(date) Setup Tacker"
   pip install -r requirements.txt
@@ -213,34 +189,109 @@ function setup () {
   python setup.py install
   mkdir /var/log/tacker
 
-  # Following lines apply to master and not stable/mitaka
-  #echo "$0: $(date) install tox"
-  #pip install tox
-  #echo "$0: $(date) generate tacker.conf.sample"
-  #tox -e config-gen
+  echo "$0: $(date) install tox"
+  pip install --upgrade tox
+  echo "$0: $(date) generate tacker.conf.sample"
+  tox -e config-gen
 
   echo "$0: $(date) Update tacker.conf values"
   mkdir /usr/local/etc/tacker
-  cp etc/tacker/tacker.conf /usr/local/etc/tacker/tacker.conf
-  sed -i -- 's/# auth_strategy = keystone/auth_strategy = keystone/' /usr/local/etc/tacker/tacker.conf
-  sed -i -- 's/# debug = False/debug = True/' /usr/local/etc/tacker/tacker.conf
-  sed -i -- 's/# use_syslog = False/use_syslog = False/' /usr/local/etc/tacker/tacker.conf
-  sed -i -- 's~# state_path = /var/lib/tacker~state_path = /var/lib/tacker~' /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s/project_name = service/project_name = $service_project/g" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s/password = service-password/password = tacker/" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s/username = tacker/username = tacker/" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s~auth_url = http://127.0.0.1:35357~auth_url = http://$KEYSTONE_HOST:35357~" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s~identity_uri = http://127.0.0.1:5000~# identity_uri = http://127.0.0.1:5000~" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s~auth_uri = http://127.0.0.1:5000~auth_uri = http://$KEYSTONE_HOST:5000~" /usr/local/etc/tacker/tacker.conf
-  # Not sure what the effect of the next line is, given that we are running as root
+  cp etc/tacker/tacker.conf.sample /usr/local/etc/tacker/tacker.conf
+
+  # [DEFAULT] section (update)    
+  sed -i -- 's/#auth_strategy = keystone/auth_strategy = keystone/' /usr/local/etc/tacker/tacker.conf
+  # [DEFAULT] section (add to)    
+  sed -i -- "/\[DEFAULT\]/adebug = True" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "/\[DEFAULT\]/ause_syslog = False" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "/\[DEFAULT\]/alogging_context_format_string = %(asctime)s.%(msecs)03d %(levelname)s %(name)s [%(request_id)s %(user_name)s %(project_name)s] %(instance)s%(message)s" /usr/local/etc/tacker/tacker.conf
+  sed -i -- 's~#policy_file = policy.json~policy_file = /usr/local/etc/tacker/policy.json~' /usr/local/etc/tacker/tacker.conf
+  sed -i -- 's~#state_path = /var/lib/tacker~state_path = /var/lib/tacker~' /usr/local/etc/tacker/tacker.conf
+
+  # Not sure what the effect of the next line is, given that we are running as root in the container
   #sed -i -- "s~# root_helper = sudo~root_helper = sudo /usr/local/bin/tacker-rootwrap /usr/local/etc/tacker/rootwrap.conf~" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s~# connection = mysql://root:pass@127.0.0.1:3306/tacker~connection = mysql://root:$MYSQL_PASSWORD@localhost:3306/tacker?charset=utf8~" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s~heat_uri = http://localhost:8004/v1~heat_uri = http://$HEAT_HOST:8004/v1~" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s~# api_paste_config = api-paste.ini~api_paste_config = /tmp/tacker/tacker/etc/tacker/api-paste.ini~" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s/# bind_host = 0.0.0.0/bind_host = $ip/" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s/# bind_port = 8888/bind_port = 9890/" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s/stack_retries = 60/stack_retries = 10/" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s/stack_retry_wait = 5/stack_retry_wait = 60/" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "s~#api_paste_config = api-paste.ini~api_paste_config = /tmp/tacker/tacker/etc/tacker/api-paste.ini~" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "s/#bind_host = 0.0.0.0/bind_host = $ip/" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "s/#bind_port = 8888/bind_port = 9890/" /usr/local/etc/tacker/tacker.conf
+
+# Newton changes, based upon sample newton gate test conf file provided by sridhar_ram on #tacker
+  region=$(openstack endpoint list | awk "/ nova / { print \$4 }")
+  sed -i -- "s/#nova_region_name = <None>/#nova_region_name = $region/" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "s/#nova_api_insecure = false/nova_api_insecure = False/" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "s/#nova_ca_certificates_file = <None>/nova_ca_certificates_file =/" /usr/local/etc/tacker/tacker.conf
+  keystone_adminurl=$(openstack endpoint show keystone | awk "/ adminurl / { print \$4 }")
+  sed -i -- "s~#nova_admin_auth_url = http://localhost:5000/v2.0~nova_admin_auth_url = $keystone_adminurl~" /usr/local/etc/tacker/tacker.conf
+  # TODO: don't hard-code service tenant ID
+  sed -i -- "s/#nova_admin_tenant_id = <None>/nova_admin_tenant_id = service/" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "s/#nova_admin_password = <None>/nova_admin_password = $OS_PASSWORD/" /usr/local/etc/tacker/tacker.conf
+  # this diff seems superfluous < nova_admin_user_name = nova
+    #  only one ref in tacker (setting the default value)
+    # devstack/lib/tacker:    iniset $TACKER_CONF DEFAULT nova_admin_user_name nova
+  # set nova_url to "/v2" (normal value is "/v2.1") due to tacker API version compatibility (?)
+  nova_ipport=$(openstack endpoint show nova | awk "/ adminurl / { print \$4 }" | awk -F'[/]' '{print $3}')
+  sed -i -- "s~#nova_url = http://127.0.0.1:8774/v2~nova_url = http://$nova_ipport/v2~" /usr/local/etc/tacker/tacker.conf
+  mkdir /var/lib/tacker
+  sed -i -- "s~#state_path = /var/lib/tacker~state_path = /var/lib/tacker~" /usr/local/etc/tacker/tacker.conf
+
+  # [alarm_auth] section - optional (?)
+  # < url = http://15.184.66.78:35357/v3
+  # < project_name = service
+  # < password = secretservice
+  # < uername = tacker
+
+  # [nfvo_vim] section
+  sed -i -- "s/#default_vim = <None>/default_vim = VIM0/" /usr/local/etc/tacker/tacker.conf
+
+  # [openstack_vim] section
+  sed -i -- "s/#stack_retries = 60/stack_retries = 10/" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "s/#stack_retry_wait = 5/stack_retry_wait = 60/" /usr/local/etc/tacker/tacker.conf
+
+  # newton: add [keystone_authtoken] missing in generated tacker.conf.sample, excluding the following
+  # (not referenced) memcached_servers = 15.184.66.78:11211
+  # (not referenced) signing_dir = /var/cache/tacker
+  # (not referenced) cafile = /opt/stack/data/ca-bundle.pem
+  # (not referenced) auth_uri = http://15.184.66.78/identity
+  cat >>/usr/local/etc/tacker/tacker.conf <<EOF
+[keystone_authtoken]
+auth_url = $(openstack endpoint show keystone | awk "/ internalurl / { print \$4 }")
+project_domain_name = Default
+project_name = $service_project
+user_domain_name = Default
+password = tacker
+username = tacker
+auth_type = password
+EOF
+
+  # these diffs seem superfluous - not referenced at all:
+    # < transport_url = rabbit://stackrabbit:secretrabbit@15.184.66.78:5672/
+    # < heat_uri = http://15.184.66.78:8004/v1
+
+  # newton: add [tacker_heat] missing in generated tacker.conf.sample
+  cat >>/usr/local/etc/tacker/tacker.conf <<EOF
+[tacker_heat]
+stack_retry_wait = 10
+stack_retries = 60
+heat_uri = http://$HEAT_HOST:8004/v1
+EOF
+
+  # newton: add [database] missing in generated tacker.conf.sample
+  cat >>/usr/local/etc/tacker/tacker.conf <<EOF
+[database]
+connection = mysql://tacker:$MYSQL_PASSWORD@localhost:3306/tacker?charset=utf8
+EOF
+ 
+  # newton: add [tacker_nova] missing in generated tacker.conf.sample, excluding the following
+    # these diffs seem superfluous - the only ref'd field is region_name:
+    # project_domain_id = default
+    # project_name = service
+    # user_domain_id = default
+    # password = secretservice
+    # username = nova
+    # auth_url = http://15.184.66.78/identity_v2_admin
+    # auth_plugin = password
+  cat >>/usr/local/etc/tacker/tacker.conf <<EOF
+[tacker_nova]
+region_name = $region
+EOF
 
   echo "$0: $(date) Populate Tacker database"
   /usr/local/bin/tacker-db-manage --config-file /usr/local/etc/tacker/tacker.conf upgrade head
@@ -250,7 +301,7 @@ function setup () {
   if [[ -d /tmp/tacker/python-tackerclient ]]; then rm -rf /tmp/tacker/python-tackerclient; fi
   git clone https://github.com/openstack/python-tackerclient
   cd python-tackerclient
-  git checkout stable/mitaka
+  git checkout stable/newton
   python setup.py install
 
   # deferred until its determined how to get this to Horizon
@@ -271,14 +322,22 @@ function setup () {
 
   echo "$0: $(date) Register default VIM"
   cd /tmp/tacker
+  # TODO: bug in https://github.com/openstack/python-tackerclient/blob/stable/newton/tackerclient/common/utils.py
+  # expects that there will be a port specified in the auth_url
+  # TODO: bug: user_domain_name: Default is required even for identity v2
   cat <<EOF >vim-config.yaml 
-auth_url: $OS_AUTH_URL
+auth_url: http://$KEYSTONE_HOST:5000/identity/v2.0
 username: $OS_USERNAME
 password: $OS_PASSWORD
 project_name: admin
+project_domain_name: Default
+user_domain_name: Default
+user_id: $(openstack user list | awk "/ admin / { print \$2 }")
 EOF
 
-  tacker vim-register --config-file vim-config.yaml --description OpenStack --name VIM0
+  # newton: NAME (was "--name") is now a positional parameter
+  tacker vim-register --config-file vim-config.yaml --description OpenStack VIM0
+  if [ $? -eq 1 ]; then fail; fi
 
   setup_test_environment
 }
@@ -343,22 +402,13 @@ function clean () {
   pid=($(neutron router-port-list vnf_private_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_private_router vnf_private;  done
   neutron router-delete vnf_private_router
   neutron net-delete vnf_private
-  sudo docker stop $(sudo docker ps -a | awk "/tacker/ { print \$1 }")
-  sudo docker rm -v $(sudo docker ps -a | awk "/tacker/ { print \$1 }")
 }
 
 start=`date +%s`
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
-case "$2" in
+case "$1" in
   "init")
     setenv
-    uid=$(openstack user list | awk "/ tacker / { print \$2 }")
-    if [[ $uid ]]; then
-      echo "$0: $(date) Remove prior Tacker user etc"
-      openstack user delete tacker
-      openstack service delete tacker
-      # Note: deleting the service deletes the endpoint
-    fi
     create_container
     pass
     ;;
@@ -371,7 +421,7 @@ case "$2" in
     pass
     ;;
   *)
-    echo "usage: bash tacker-setup.sh [tacker-cli|tacker-api] [init|setup|clean]"
+    echo "usage: bash tacker-setup.sh [init|setup|clean]"
     echo "init: Initialize docker container"
     echo "setup: Setup of Tacker in the docker container"
     echo "clean: remove Tacker service"
