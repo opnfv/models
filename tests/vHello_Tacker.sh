@@ -24,24 +24,36 @@
 # Mitaka.
 #
 # Pre-State: 
-# models-joid-001 | models-apex-001 (installation of OPNFV system)
+# This test can be run in either an OPNFV environment, or an plain OpenStack
+# environment (e.g. Devstack). 
+# For Devstack running in a VM on the host, you must first enable the host to 
+#   access the VMs running under Devstack:
+#   1) In devstack VM: 
+#      $ sudo iptables -t nat -A POSTROUTING -o ens3 -j MASQUERADE
+#      Sub the primary interface of your devstack VM for ens3, as needed.
+#   2) On the host (e.g linux): 
+#      $ sudo route add -net 172.24.0.0/16 gw 192.168.122.112
+#      Sub your devstack Public network subnet for 172.24.0.0/16, and 
+#      your devstack VM IP address on the host for 192.168.122.112
+# For OPNFV-based tests, pre-requisites are
+#   1) models-joid-001 | models-apex-001 (installation of OPNFV system)
 #
 # Test Steps and Assertions:
-# 1) bash vHello_Tacker.sh tacker-cli setup|start|run|stop|clean]
+# 1) bash vHello_Tacker.sh setup <openrc>
 #   models-tacker-001 (Tacker installation in a docker container on the jumphost)
 #   models-nova-001 (Keypair creation)
-# 2) bash vHello_Tacker.sh tacker-cli start
+# 2) bash vHello_Tacker.sh start
 #   models-tacker-002 (VNFD creation)
 #   models-tacker-003 (VNF creation)
 #   models-tacker-vnfd-001 (config_drive creation)
 #   models-tacker-vnfd-002 (artifacts creation)
 #   models-tacker-vnfd-003 (user_data creation)
 #   models-vhello-001 (vHello VNF creation)
-# 3) bash vHello_Tacker.sh tacker-cli stop
+# 3) bash vHello_Tacker.sh stop
 #   models-tacker-004 (VNF deletion)
 #   models-tacker-005 (VNFD deletion)
 #   models-tacker-vnfd-004 (artifacts deletion)
-# 4) bash vHello_Tacker.sh tacker-cli clean
+# 4) bash vHello_Tacker.sh clean
 #   TODO: add assertions
 #
 # Post-State: 
@@ -51,19 +63,19 @@
 # After step 3, the VNF is deleted and the system returned to step 1 post-state.
 # After step 4, the system returned to test pre-state.
 #
-# Cleanup: bash vHello_Tacker.sh tacker-cli clean
+# Cleanup: bash vHello_Tacker.sh clean
 #
 # How to use:
 #   $ git clone https://gerrit.opnfv.org/gerrit/models
 #   $ cd models/tests
-#   $ bash vHello_Tacker.sh [tacker-cli|tacker-api] [setup|start|run|stop|clean]
-#   tacker-cli: use Tacker CLI
-#   tacker-api: use Tacker RESTful API (not yet implemented)
+#   $ bash vHello_Tacker.sh [setup|start|run|stop|clean] [<openrc>] [<heat_host>]
 #   setup: setup test environment
-#   start: install blueprint and run test
 #   run: setup test environment and run test
+#   start: install blueprint and run test
 #   stop: stop test and uninstall blueprint
 #   clean: cleanup after test
+#   <openrc>: include for setup|run as location of OpenStack openrc file
+#   <heat_host>: include for setup|run as IP address of the Heat service
 
 trap 'fail' ERR
 
@@ -123,23 +135,38 @@ setup () {
   mkdir -p /tmp/tacker
   chmod 777 /tmp/tacker/
   cp $0 /tmp/tacker/.
+  cp $1 /tmp/tacker/admin-openrc.sh
+  source /tmp/tacker/admin-openrc.sh
+  echo "export HEAT_HOST=$2" >>/tmp/tacker/admin-openrc.sh
+  echo "export KEYSTONE_HOST=$(echo $OS_AUTH_URL | awk -F'[/]' '{print $3}')" >>/tmp/tacker/admin-openrc.sh
   chmod 755 /tmp/tacker/*.sh
 
   echo "$0: $(date) tacker-setup part 1"
-  bash utils/tacker-setup.sh $1 init
+  bash utils/tacker-setup.sh init
+  if [ $? -eq 1 ]; then fail; fi
 
   echo "$0: $(date) tacker-setup part 2"
-  CONTAINER=$(sudo docker ps -l | awk "/tacker/ { print \$1 }")
+# TODO: find a generic way to set extension_drivers = port_security in ml2_conf.ini
+  # On the neutron service host, update ml2_conf.ini and and restart neutron service
+  # sed -i -- 's~#extension_drivers =~extension_drivers = port_security~' /etc/neutron/plugins/ml2/ml2_conf.ini
+  # For devstack, set in local.conf per http://docs.openstack.org/developer/devstack/guides/neutron.html
+  # Q_ML2_PLUGIN_EXT_DRIVERS=port_security
+
   dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
   if [ "$dist" == "Ubuntu" ]; then
-    echo "$0: $(date) JOID workaround for Colorado - enable ML2 port security"
-    juju set neutron-api enable-ml2-port-security=true
+    dpkg -l juju
+    if [[ $? -eq 0 ]]; then
+      echo "$0: $(date) JOID workaround for Colorado - enable ML2 port security"
+      juju set neutron-api enable-ml2-port-security=true
+    fi
 
     echo "$0: $(date) Execute tacker-setup.sh in the container"
-    sudo docker exec -it $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
+    sudo docker exec -it tacker /bin/bash /tmp/tacker/tacker-setup.sh setup
+    if [ $? -eq 1 ]; then fail; fi
   else
     echo "$0: $(date) Execute tacker-setup.sh in the container"
-    sudo docker exec -i -t $CONTAINER /bin/bash /tmp/tacker/tacker-setup.sh $1 setup
+    sudo docker exec -i -t tacker /bin/bash /tmp/tacker/tacker-setup.sh setup
+    if [ $? -eq 1 ]; then fail; fi
   fi
 
   assert "models-tacker-001 (Tacker installation in a docker container on the jumphost)" true 
@@ -150,7 +177,9 @@ setup () {
 
   echo "$0: $(date) copy tosca-vnfd-hello-world-tacker to blueprints folder"
   cp -r blueprints/tosca-vnfd-hello-world-tacker /tmp/tacker/blueprints
+}
 
+start() {
   echo "$0: $(date) setup OpenStack CLI environment"
   source /tmp/tacker/admin-openrc.sh
 
@@ -164,22 +193,20 @@ setup () {
   echo "$0: $(date) Inject public key into blueprint"
   pubkey=$(cat /tmp/tacker/vHello.pub)
   sed -i -- "s~<pubkey>~$pubkey~" /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker/blueprint.yaml
-}
-
-start() {
-  echo "$0: $(date) setup OpenStack CLI environment"
-  source /tmp/tacker/admin-openrc.sh
 
   echo "$0: $(date) Get external network for Floating IP allocations"
+  get_floating_net
 
   echo "$0: $(date) create VNFD"
   cd /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker
-  tacker vnfd-create --vnfd-file blueprint.yaml --name hello-world-tacker
+  # newton: NAME (was "--name") is now a positional parameter
+  tacker vnfd-create --vnfd-file blueprint.yaml hello-world-tacker
   if [ $? -eq 1 ]; then fail; fi
   assert "models-tacker-002 (VNFD creation)" true 
 
   echo "$0: $(date) create VNF"
-  tacker vnf-create --vnfd-name hello-world-tacker --name hello-world-tacker
+  # newton: NAME (was "--name") is now a positional parameter
+  tacker vnf-create --vnfd-name hello-world-tacker hello-world-tacker
   if [ $? -eq 1 ]; then fail; fi
 
   echo "$0: $(date) wait for hello-world-tacker to go ACTIVE"
@@ -187,7 +214,7 @@ start() {
   while [[ -z $active ]]
   do
     active=$(tacker vnf-show hello-world-tacker | grep ACTIVE)
-    if [ "$(tacker vnf-show hello-world-tacker | grep -c ERROR)" == "1" ]; then 
+    if [ "$(tacker vnf-show hello-world-tacker | grep -c ERROR)" > "0" ]; then 
       echo "$0: $(date) hello-world-tacker VNF creation failed with state ERROR"
       fail
     fi
@@ -248,13 +275,15 @@ stop() {
 
   echo "$0: $(date) uninstall vHello blueprint via CLI"
   vid=($(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do tacker vnf-delete ${id}; done
-  assert "models-tacker-004 (VNF deletion)" [[ -z "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}'))" ]]
+  assert "models-tacker-004 (VNF deletion)" [[ -z "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')" ]]
 
-  vid=($(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do tacker vnfd-delete ${id};  done
-  assert "models-tacker-005 (VNFD deletion)" [[ -z "$(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}'))" ]]
+  vid=($(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do try 6 10 "tacker vnfd-delete ${id}";  done
+  assert "models-tacker-005 (VNFD deletion)" [[ -z "$(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')" ]]
+
+  for id in ${sg[@]}; do try 5 5 "openstack security group delete ${id}";  done
 
   iid=($(openstack image list|grep VNFImage|awk '{print $2}')); for id in ${iid[@]}; do openstack image delete ${id};  done
-  assert "models-tacker-vnfd-004 (artifacts deletion)" [[ -z "$(openstack image list|grep VNFImage|awk '{print $2}'))" ]]
+  assert "models-tacker-vnfd-004 (artifacts deletion)" [[ -z "$(openstack image list|grep VNFImage|awk '{print $2}')" ]]
 
   # Cleanup for workarounds
   fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
@@ -264,52 +293,47 @@ stop() {
 }
 
 forward_to_container () {
-  echo "$0: $(date) pass $2 command to vHello.sh in tacker container"
+  echo "$0: $(date) pass $1 command to vHello.sh in tacker container"
   CONTAINER=$(sudo docker ps -a | awk "/tacker/ { print \$1 }")
-  sudo docker exec $CONTAINER /bin/bash /tmp/tacker/vHello_Tacker.sh $1 $2 $2
+  sudo docker exec $CONTAINER /bin/bash /tmp/tacker/vHello_Tacker.sh $1
   if [ $? -eq 1 ]; then fail; fi
 }
 
 test_start=`date +%s`
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 
-if [[ "$1" == "tacker-api" ]]; then
-  echo "$0: $(date) Tacker API use is not yet implemented"
-  fail
-fi
-
-case "$2" in
+case "$1" in
   setup)
-    setup $1
+    setup $2 $3
     if [ $? -eq 1 ]; then fail; fi
     pass
     ;;
   run)
-    setup $1
-    forward_to_container $1 start
+    setup $2 $3
+    forward_to_container start
     if [ $? -eq 1 ]; then fail; fi
     pass
     ;;
   start|stop)
-    if [[ $# -eq 2 ]]; then forward_to_container $1 $2
+    if [[ -f /.dockerenv ]]; then
+      $1
     else
-      # running inside the tacker container, ready to go
-      $2 $1
+      forward_to_container $1
     fi
     if [ $? -eq 1 ]; then fail; fi
     pass
     ;;
   clean)
-    forward_to_container stop $2
     echo "$0: $(date) Uninstall Tacker and test environment"
-    bash utils/tacker-setup.sh $1 clean
+    forward_to_container stop
+    sudo docker exec -it tacker /bin/bash /tmp/tacker/tacker-setup.sh clean
+    sudo docker stop tacker
+    sudo docker rm -v tacker
     if [ $? -eq 1 ]; then fail; fi
     pass
     ;;
   *)
-    echo "usage: bash vHello_Tacker.sh [tacker-cli|tacker-api] [setup|start|run|clean]"
-    echo "tacker-cli: use Tacker CLI"
-    echo "tacker-api: use Tacker RESTful API (not yet implemented)"
+    echo "usage: bash vHello_Tacker.sh [setup|start|run|stop|clean]"
     echo "setup: setup test environment"
     echo "start: install blueprint and run test"
     echo "run: setup test environment and run test"
