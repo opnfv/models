@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# What this is: Setup script for OpenStack Clients (OSC) running in  
-# an Unbuntu Xenial docker container. You can use this script to isolate the 
-# OSC from your host, so that the OSC and related install pre-reqs do not 
-# pollute your host environment. You can then then modify your tests scripts on 
-# your host and run them using the OSC container rather than moving the test 
+# What this is: Setup script for OpenStack Clients (OSC) running in
+# an Unbuntu Xenial docker container. You can use this script to isolate the
+# OSC from your host, so that the OSC and related install pre-reqs do not
+# pollute your host environment. You can then then modify your tests scripts on
+# your host and run them using the OSC container rather than moving the test
 # scripts to DevStack or an OpenStack installation (see below). You can also
 # attach to the OSC container. Enter "sudo docker attach osclient" then hit enter
 # twice and you will be in the container as root (there are no other users).
@@ -27,25 +27,44 @@
 # Status: this is a work in progress, under test.
 #
 # How to use:
-#   $ bash osclient.sh setup|run|clean (see detailed parameters below)
-#   setup: install the OpenStack CLI clients in a container on the host.
-#     $ bash osclient.sh setup <path to credential script> [branch]
-#     <path to credential script>: OpenStack CLI env setup script (e.g.
-#       admin-openrc.sh), obtained from the OpenStack Dashboard via
-#       Project->Access->Security->API. It's also recommended that you set the
-#       OpenStack password explicitly in that script rather than take the
-#       default which will prompt you on every command you pass to the container.
-#       For example, if the admin-openrc.sh file is in the same directory as
-#       osclient.sh and you want to use stable/newton:
+#   1) Obtain the credential script for your OpenStack installation by logging
+#      into the OpenStack Dashboard and downloading the OpenStack RD file from
+#      Project -> Access & Security -> API Access
+#   2) Edit the *-openrc.sh file:
+#      * remove the following lines:
+#        echo "Please enter your OpenStack Password for project $OS_TENANT_NAME as user $OS_USERNAME: "
+#        read -sr OS_PASSWORD_INPUT
+#      * replace $OS_PASSWORD_INPUT with the password
+#   3) execute this command: $ bash osclient.sh setup <path to credential script> [branch]
+#      * setup: install the OpenStack CLI clients in a container on the host.
+#      * <path to credential script> location of the *-openrc.sh file you edited in step 2
+#      * branch: git repo branch to install (e.g. stable/newton) OPTIONAL; if you want the master branch,
+#        do not include this parameter
+#      * Example:
+#        If the admin-openrc.sh file is in the same directory as osclient.sh and you want to use stable/newton:
 #         $ bash osclient.sh setup admin-openrc.sh stable/newton
-#     branch: git repo branch to install (e.g. stable/newton)
-#   run: run a command in the container
-#     $ bash osclient.sh run <command>
-#     <command>: command to run, in quotes e.g. 
-#       bash osclient.sh run 'openstack service list'
-#       bash osclient.sh run 'bash mytest.sh'
-#   clean: remove the osclient container and shared folder
-#     $ bash osclient.sh clean
+#        If the admin-openrc.sh file is in a different directory and you want to use master:
+#         $ bash osclient.sh setup ~/Downloads/admin-openrc.sh
+#
+# Once the Docker container has been created and is running, you can run your scripts
+#   $ bash osclient.sh run <command>
+#     * run: run a command in the container
+#     * <command>: command to run, in quotes e.g.
+#         bash osclient.sh run 'openstack service list'
+#         bash osclient.sh run 'bash mytest.sh'
+# To run tests in the container:
+#  1) Copy the tests to the shared folder for the container (/tmp/osclient)
+#  2) Run your tests; for example, if you want to run Copper tests:
+#     $ bash ~/git/models/tests/utils/osclient.sh run "bash /tmp/osclient/copper/tests/network_bridging.sh"
+#     $ bash ~/git/models/tests/utils/osclient.sh run "bash /tmp/osclient/copper/tests/network_bridging-clean.sh"
+#  3) Due to a (?) Docker quirk, you need to remove and re-copy the tests each time you change them, e.g. as you edit the tests during development
+#     $ rm -rf /tmp/osclient/copper/tests/; cp -R ~/git/copper/tests/ /tmp/osclient/copper/tests/
+#
+# To stop and then remove the Docker container
+#   $ bash osclient.sh clean
+#     * clean: remove the osclient container and shared folder
+#     Note: you may have to run as sudo in order to delete the files in /tmp/osclient
+
 
 trap 'fail' ERR
 
@@ -88,16 +107,16 @@ function create_container() {
       ubuntu:xenial /bin/bash
     sudo docker exec osclient /bin/bash /tmp/osclient/osclient-setup.sh \
       setup /tmp/osclient/admin-openrc.sh $branch
-  else 
+  else
     # Centos
     echo "Centos-based install"
     sudo tee /etc/yum.repos.d/docker.repo <<-'EOF'
 [dockerrepo]
-name=Docker Repository--parents 
+name=Docker Repository--parents
 baseurl=https://yum.dockerproject.org/repo/main/centos/7/
 enabled=1
 gpgcheck=1
-gpgkey=https://yum.dockerproject.org/gpg 
+gpgkey=https://yum.dockerproject.org/gpg
 EOF
     sudo yum install -y docker-engine
     # xenial is needed for python 3.5
@@ -185,9 +204,9 @@ EOF
 echo "   $ bash osclient.sh setup|run|clean (see detailed parameters below)"
 echo "   setup: install the OpenStack CLI clients in a container on the host."
 echo "     $ bash osclient.sh setup <path to credential script> [branch]"
-echo "     <path to credential script>: OpenStack CLI env setup script (e.g." 
+echo "     <path to credential script>: OpenStack CLI env setup script (e.g."
 echo "       admin-openrc.sh), obtained from the OpenStack Dashboard via"
-echo "       Project->Access->Security->API. It's also recommended that you set the" 
+echo "       Project->Access->Security->API. It's also recommended that you set the"
 echo "       OpenStack password explicitly in that script rather than take the"
 echo "       default which will prompt you on every command you pass to the container."
 echo "       For example, if the admin-openrc.sh file is in the same directory as "
@@ -196,7 +215,7 @@ echo "         $ bash osclient.sh setup admin-openrc.sh stable/newton"
 echo "     branch: git repo branch to install (e.g. stable/newton)"
 echo "   run: run a command in the container"
 echo "     $ bash osclient.sh run <command>"
-echo "     <command>: command to run, in quotes e.g." 
+echo "     <command>: command to run, in quotes e.g."
 echo "       bash osclient.sh run 'openstack service list'"
 echo "       bash osclient.sh run 'bash mytest.sh'"
 echo "   clean: remove the osclient container and shared folder"
