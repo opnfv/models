@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "5ac10518_cf898227",
+        "filename": "tests/utils/tacker-setup.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 150,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-25T21:21:27Z",
+      "side": 1,
+      "message": "Do you really want to hard-code the branch? then somebody will have to update the script for each release",
+      "range": {
+        "startLine": 149,
+        "startChar": 0,
+        "endLine": 150,
+        "endChar": 51
+      },
+      "revId": "de50ff125e2b900472513970dcfd3ff5f5030960",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ac10518_ef8c7e37",
+        "filename": "tests/utils/tacker-setup.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 187,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-01-25T21:21:27Z",
+      "side": 1,
+      "message": "Do you really want to hard-code the branch?",
+      "range": {
+        "startLine": 187,
+        "startChar": 15,
+        "endLine": 187,
+        "endChar": 28
+      },
+      "revId": "de50ff125e2b900472513970dcfd3ff5f5030960",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    }
+  ]
+}
