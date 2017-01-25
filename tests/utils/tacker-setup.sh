@@ -48,6 +48,7 @@ function setenv () {
   echo "$0: $(date) Setup shared virtual folders and save this script there"
   mkdir /tmp/tacker
   cp $0 /tmp/tacker/.
+  cp `dirname $0`/tacker/tacker.conf.sample /tmp/tacker/.
   chmod 755 /tmp/tacker/*.sh
 
   echo "$0: $(date) Setup admin-openrc.sh"
@@ -60,8 +61,8 @@ function get_external_net () {
       [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && ext_net_id=${id}
   done
   if [[ $ext_net_id ]]; then 
-    EXTERNAL_NETWORK_NAME=$(openstack network show $ext_net_id | awk "/ name / { print \$4 }")
-    EXTERNAL_SUBNET_ID=$(openstack network show $EXTERNAL_NETWORK_NAME | awk "/ subnets / { print \$4 }")
+    EXTERNAL_NETWORK_NAME=$(neutron net-show $ext_net_id | awk "/ name / { print \$4 }")
+    EXTERNAL_SUBNET_ID=$(neutron net-show $EXTERNAL_NETWORK_NAME | awk "/ subnets / { print \$4 }")
   else
     echo "$0: $(date) External network not found"
     exit 1
@@ -126,6 +127,8 @@ function setup () {
     apt-get install -y libssl-dev
     # newton: tacker uses ping for monitoring VIM (not in default docker containers)
     apt-get install -y inetutils-ping
+    # apt-utils is not installed in xenial container image
+    apt-get install -y apt-utils
     export MYSQL_PASSWORD=$(/usr/bin/apg -n 1 -m 16 -c cl_seed)
     echo $MYSQL_PASSWORD >~/mysql
     debconf-set-selections <<< 'mysql-server mysql-server/root_password password '$MYSQL_PASSWORD
@@ -143,8 +146,8 @@ function setup () {
   pip install --upgrade pip
 
   echo "$0: $(date) Install OpenStack clients"
-  install_client python-openstackclient $branch
-  install_client python-neutronclient $branch
+  install_client python-openstackclient stable/newton
+  install_client python-neutronclient stable/newton
 
 #  pip install --upgrade python-openstackclient python-glanceclient python-neutronclient keystonemiddleware
 
@@ -189,14 +192,15 @@ function setup () {
   python setup.py install
   mkdir /var/log/tacker
 
-  echo "$0: $(date) install tox"
-  pip install --upgrade tox
-  echo "$0: $(date) generate tacker.conf.sample"
-  tox -e config-gen
+#  "tox -e config-gen" is throwing errors, disabled - see tacker.conf.sample above
+#  echo "$0: $(date) install tox"
+#  pip install --upgrade tox
+#  echo "$0: $(date) generate tacker.conf.sample"
+#  tox -e config-gen
 
   echo "$0: $(date) Update tacker.conf values"
   mkdir /usr/local/etc/tacker
-  cp etc/tacker/tacker.conf.sample /usr/local/etc/tacker/tacker.conf
+  cp /tmp/tacker/tacker.conf.sample /usr/local/etc/tacker/tacker.conf
 
   # [DEFAULT] section (update)    
   sed -i -- 's/#auth_strategy = keystone/auth_strategy = keystone/' /usr/local/etc/tacker/tacker.conf
