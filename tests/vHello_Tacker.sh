@@ -39,7 +39,7 @@
 #   1) models-joid-001 | models-apex-001 (installation of OPNFV system)
 #
 # Test Steps and Assertions:
-# 1) bash vHello_Tacker.sh setup <openrc>
+# 1) bash vHello_Tacker.sh setup <openrc> [branch]
 #   models-tacker-001 (Tacker installation in a docker container on the jumphost)
 #   models-nova-001 (Keypair creation)
 # 2) bash vHello_Tacker.sh start
@@ -68,14 +68,16 @@
 # How to use:
 #   $ git clone https://gerrit.opnfv.org/gerrit/models
 #   $ cd models/tests
-#   $ bash vHello_Tacker.sh [setup|start|run|stop|clean] [<openrc>] [<heat_host>]
-#   setup: setup test environment
-#   run: setup test environment and run test
-#   start: install blueprint and run test
-#   stop: stop test and uninstall blueprint
-#   clean: cleanup after test
-#   <openrc>: include for setup|run as location of OpenStack openrc file
-#   <heat_host>: include for setup|run as IP address of the Heat service
+#   $ bash vHello_Tacker.sh [setup|run] [<openrc>] [<heat_host>] [branch]
+#     setup: setup test environment
+#     <openrc>: location of OpenStack openrc file
+#     <heat_host>: IP address of the Heat service
+#     branch: OpenStack branch to install (default: master)
+#   $ bash vHello_Tacker.sh [start|stop|clean]
+#     run: setup test environment and run test
+#     start: install blueprint and run test
+#     stop: stop test and uninstall blueprint
+#     clean: cleanup after test
 
 trap 'fail' ERR
 
@@ -110,7 +112,7 @@ get_floating_net () {
       [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && FLOATING_NETWORK_ID=${id}
   done
   if [[ $FLOATING_NETWORK_ID ]]; then
-    FLOATING_NETWORK_NAME=$(openstack network show $FLOATING_NETWORK_ID | awk "/ name / { print \$4 }")
+    FLOATING_NETWORK_NAME=$(neutron net-show $FLOATING_NETWORK_ID | awk "/ name / { print \$4 }")
   else
     echo "$0: $(date) Floating network not found"
     exit 1
@@ -161,11 +163,11 @@ setup () {
     fi
 
     echo "$0: $(date) Execute tacker-setup.sh in the container"
-    sudo docker exec -it tacker /bin/bash /tmp/tacker/tacker-setup.sh setup
+    sudo docker exec -it tacker /bin/bash /tmp/tacker/tacker-setup.sh setup $3
     if [ $? -eq 1 ]; then fail; fi
   else
     echo "$0: $(date) Execute tacker-setup.sh in the container"
-    sudo docker exec -i -t tacker /bin/bash /tmp/tacker/tacker-setup.sh setup
+    sudo docker exec -i -t tacker /bin/bash /tmp/tacker/tacker-setup.sh setup $3
     if [ $? -eq 1 ]; then fail; fi
   fi
 
@@ -214,7 +216,7 @@ start() {
   while [[ -z $active ]]
   do
     active=$(tacker vnf-show hello-world-tacker | grep ACTIVE)
-    if [ "$(tacker vnf-show hello-world-tacker | grep -c ERROR)" > "0" ]; then 
+    if [[ $(tacker vnf-show hello-world-tacker | grep -c ERROR) > 0 ]]; then 
       echo "$0: $(date) hello-world-tacker VNF creation failed with state ERROR"
       fail
     fi
@@ -235,16 +237,16 @@ start() {
   done
 
   echo "$0: $(date) directly assign security group (unsupported in Mitaka Tacker)"
-  if [[ $(openstack security group list | awk "/ vHello / { print \$2 }") ]]; then openstack security group vHello; fi
-  openstack security group create vHello
-  openstack security group rule create --ingress --protocol TCP --dst-port 22:22 vHello
-  openstack security group rule create --ingress --protocol TCP --dst-port 80:80 vHello
+  if [[ $(neutron security-group-list | awk "/ vHello / { print \$2 }") ]]; then neutron security-group-delete vHello; fi
+  neutron security-group-create vHello
+  neutron security-group-rule-create --direction ingress --protocol TCP --port-range-min 22 --port-range-max 22 vHello
+  neutron security-group-rule-create --direction ingress --protocol TCP --port-range-min 80 --port-range-max 80 vHello
   openstack server add security group $SERVER_ID vHello
   openstack server add security group $SERVER_ID default
 
   echo "$0: $(date) associate floating IP"
   get_floating_net
-  FIP=$(openstack floating ip create $FLOATING_NETWORK_NAME | awk "/floating_ip_address/ { print \$4 }")
+  FIP=$(nova floating-ip-create $FLOATING_NETWORK_NAME | awk "/public/ { print \$4 }")
   nova floating-ip-associate $SERVER_ID $FIP
   # End setup for workarounds
 
@@ -257,6 +259,12 @@ start() {
 
   echo "$0: $(date) verify vHello server is running"
   apt-get install -y curl
+  count=12
+  while [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]] 
+  do 
+    sleep 10
+    let count=$count-1
+  done
   if [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]]; then fail; fi
   assert "models-vhello-001 (vHello VNF creation)" true 
   assert "models-tacker-003 (VNF creation)" true
@@ -304,12 +312,12 @@ dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 
 case "$1" in
   setup)
-    setup $2 $3
+    setup $2 $3 $4
     if [ $? -eq 1 ]; then fail; fi
     pass
     ;;
   run)
-    setup $2 $3
+    setup $2 $3 $4
     forward_to_container start
     if [ $? -eq 1 ]; then fail; fi
     pass

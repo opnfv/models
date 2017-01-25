@@ -20,10 +20,11 @@
 # Status: this is a work in progress, under test.
 #
 # How to use:
-#   $ bash tacker-setup.sh [init|setup|clean] 
-#   init: Initialize docker container
-#   setup: Setup of Tacker in the docker container
-#   clean: Clean
+#   $ bash tacker-setup.sh [init|setup|clean] [branch]
+#     init: Initialize docker container
+#     setup: Setup of Tacker in the docker container
+#     clean: Clean
+#     branch: OpenStack branch to install (default: master)
 
 trap 'fail' ERR
 
@@ -48,6 +49,7 @@ function setenv () {
   echo "$0: $(date) Setup shared virtual folders and save this script there"
   mkdir /tmp/tacker
   cp $0 /tmp/tacker/.
+  cp `dirname $0`/tacker/tacker.conf.sample /tmp/tacker/.
   chmod 755 /tmp/tacker/*.sh
 
   echo "$0: $(date) Setup admin-openrc.sh"
@@ -60,8 +62,8 @@ function get_external_net () {
       [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && ext_net_id=${id}
   done
   if [[ $ext_net_id ]]; then 
-    EXTERNAL_NETWORK_NAME=$(openstack network show $ext_net_id | awk "/ name / { print \$4 }")
-    EXTERNAL_SUBNET_ID=$(openstack network show $EXTERNAL_NETWORK_NAME | awk "/ subnets / { print \$4 }")
+    EXTERNAL_NETWORK_NAME=$(neutron net-show $ext_net_id | awk "/ name / { print \$4 }")
+    EXTERNAL_SUBNET_ID=$(neutron net-show $EXTERNAL_NETWORK_NAME | awk "/ subnets / { print \$4 }")
   else
     echo "$0: $(date) External network not found"
     exit 1
@@ -109,6 +111,7 @@ install_client () {
 }
 
 function setup () {
+  branch=$1
   echo "$0: $(date) Installing Tacker"
   # STEP 2: Install Tacker in the container
   # Per http://docs.openstack.org/developer/tacker/install/manual_installation.html
@@ -126,6 +129,8 @@ function setup () {
     apt-get install -y libssl-dev
     # newton: tacker uses ping for monitoring VIM (not in default docker containers)
     apt-get install -y inetutils-ping
+    # apt-utils is not installed in xenial container image
+    apt-get install -y apt-utils
     export MYSQL_PASSWORD=$(/usr/bin/apg -n 1 -m 16 -c cl_seed)
     echo $MYSQL_PASSWORD >~/mysql
     debconf-set-selections <<< 'mysql-server mysql-server/root_password password '$MYSQL_PASSWORD
@@ -181,7 +186,7 @@ function setup () {
   if [[ -d /tmp/tacker/tacker ]]; then rm -rf /tmp/tacker/tacker; fi
   git clone git://git.openstack.org/openstack/tacker
   cd tacker
-  git checkout stable/newton
+  git checkout $branch
 
   echo "$0: $(date) Setup Tacker"
   pip install -r requirements.txt
@@ -189,14 +194,15 @@ function setup () {
   python setup.py install
   mkdir /var/log/tacker
 
-  echo "$0: $(date) install tox"
-  pip install --upgrade tox
-  echo "$0: $(date) generate tacker.conf.sample"
-  tox -e config-gen
+#  "tox -e config-gen" is throwing errors, disabled - see tacker.conf.sample above
+#  echo "$0: $(date) install tox"
+#  pip install --upgrade tox
+#  echo "$0: $(date) generate tacker.conf.sample"
+#  tox -e config-gen
 
   echo "$0: $(date) Update tacker.conf values"
   mkdir /usr/local/etc/tacker
-  cp etc/tacker/tacker.conf.sample /usr/local/etc/tacker/tacker.conf
+  cp /tmp/tacker/tacker.conf.sample /usr/local/etc/tacker/tacker.conf
 
   # [DEFAULT] section (update)    
   sed -i -- 's/#auth_strategy = keystone/auth_strategy = keystone/' /usr/local/etc/tacker/tacker.conf
@@ -303,7 +309,7 @@ EOF
   if [[ -d /tmp/tacker/python-tackerclient ]]; then rm -rf /tmp/tacker/python-tackerclient; fi
   git clone https://github.com/openstack/python-tackerclient
   cd python-tackerclient
-  git checkout stable/newton
+  git checkout $branch
   python setup.py install
 
   # deferred until its determined how to get this to Horizon
@@ -415,7 +421,7 @@ case "$1" in
     pass
     ;;
   "setup")
-    setup
+    setup $2
     pass
     ;;
   "clean")
