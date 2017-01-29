@@ -258,7 +258,6 @@ start() {
 
   echo "$0: $(date) verify vHello server is running"
   apt-get install -y curl
-<<<<<<< HEAD
   count=12
   while [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]] 
   do 
@@ -267,9 +266,7 @@ start() {
   done
   if [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]]; then fail; fi
   assert "models-vhello-001 (vHello VNF creation)" true 
-=======
   assert "models-vhello-001 (vHello VNF creation)" [[ $(curl $SERVER_URL | grep -c "Hello World") > 0 ]] 
->>>>>>> 26abbf6... Fix assertions
   assert "models-tacker-003 (VNF creation)" true
   assert "models-tacker-vnfd-002 (artifacts creation)" true
   assert "models-tacker-vnfd-003 (user_data creation)" true
