@@ -203,8 +203,7 @@ start() {
   cd /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker
   # newton: NAME (was "--name") is now a positional parameter
   tacker vnfd-create --vnfd-file blueprint.yaml hello-world-tacker
-  if [ $? -eq 1 ]; then fail; fi
-  assert "models-tacker-002 (VNFD creation)" true 
+  assert "models-tacker-002 (VNFD creation)" [[ $? -eq 0 ]]
 
   echo "$0: $(date) create VNF"
   # newton: NAME (was "--name") is now a positional parameter
@@ -218,7 +217,7 @@ start() {
     active=$(tacker vnf-show hello-world-tacker | grep ACTIVE)
     if [[ $(tacker vnf-show hello-world-tacker | grep -c ERROR) > 0 ]]; then 
       echo "$0: $(date) hello-world-tacker VNF creation failed with state ERROR"
-      fail
+      assert "models-tacker-002 (VNF creation)" false
     fi
     sleep 10
     echo "$0: $(date) wait for hello-world-tacker to go ACTIVE"
@@ -259,6 +258,7 @@ start() {
 
   echo "$0: $(date) verify vHello server is running"
   apt-get install -y curl
+<<<<<<< HEAD
   count=12
   while [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]] 
   do 
@@ -267,14 +267,16 @@ start() {
   done
   if [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]]; then fail; fi
   assert "models-vhello-001 (vHello VNF creation)" true 
+=======
+  assert "models-vhello-001 (vHello VNF creation)" [[ $(curl $SERVER_URL | grep -c "Hello World") > 0 ]] 
+>>>>>>> 26abbf6... Fix assertions
   assert "models-tacker-003 (VNF creation)" true
   assert "models-tacker-vnfd-002 (artifacts creation)" true
   assert "models-tacker-vnfd-003 (user_data creation)" true
 
   echo "$0: $(date) verify contents of config drive are included in web page"
   id=$(curl $SERVER_URL | awk "/uuid/ { print \$2 }")
-  if [[ -z "$id" ]]; then fail; fi
-  assert "models-tacker-vnfd-001 (config_drive creation)" true 
+  assert "models-tacker-vnfd-001 (config_drive creation)" [[ -z "$id" ]]
 }
 
 stop() {
