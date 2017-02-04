@@ -21,7 +21,7 @@
 # two internal networks (private and admin), and accessible via a floating IP.
 # Based upon the OpenStack Tacker project's "tosca-vnfd-hello-world" blueprint,
 # as extended for testing of more Tacker-supported features as of OpenStack 
-# Mitaka.
+# Newton.
 #
 # Pre-State: 
 # This test can be run in either an OPNFV environment, or an plain OpenStack
