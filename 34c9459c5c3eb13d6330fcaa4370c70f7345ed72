@@ -1,0 +1,73 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1acb0d3e_f94a7a26",
+        "filename": "tests/utils/tacker-setup.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 17,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-02-07T14:38:58Z",
+      "side": 1,
+      "message": "which can be installed on Ubuntu or Centos, right? Asking because create_container checks distro",
+      "range": {
+        "startLine": 17,
+        "startChar": 36,
+        "endLine": 17,
+        "endChar": 38
+      },
+      "revId": "34c9459c5c3eb13d6330fcaa4370c70f7345ed72",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1acb0d3e_3941e20b",
+        "filename": "tests/utils/tacker-setup.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 18,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-02-07T14:38:58Z",
+      "side": 1,
+      "message": "typo",
+      "range": {
+        "startLine": 18,
+        "startChar": 24,
+        "endLine": 18,
+        "endChar": 26
+      },
+      "revId": "34c9459c5c3eb13d6330fcaa4370c70f7345ed72",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1acb0d3e_79052ac1",
+        "filename": "tests/vHello_Tacker.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 27,
+      "author": {
+        "id": 4807
+      },
+      "writtenOn": "2017-02-07T14:38:58Z",
+      "side": 1,
+      "message": "typo",
+      "range": {
+        "startLine": 27,
+        "startChar": 59,
+        "endLine": 27,
+        "endChar": 60
+      },
+      "revId": "34c9459c5c3eb13d6330fcaa4370c70f7345ed72",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    }
+  ]
+}
