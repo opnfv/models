@@ -21,10 +21,10 @@
 # two internal networks (private and admin), and accessible via a floating IP.
 # Based upon the OpenStack Tacker project's "tosca-vnfd-hello-world" blueprint,
 # as extended for testing of more Tacker-supported features as of OpenStack 
-# Mitaka.
+# Newton.
 #
 # Pre-State: 
-# This test can be run in either an OPNFV environment, or an plain OpenStack
+# This test can be run in either an OPNFV environment, or a plain OpenStack
 # environment (e.g. Devstack). 
 # For Devstack running in a VM on the host, you must first enable the host to 
 #   access the VMs running under Devstack:
@@ -58,7 +58,7 @@
 #
 # Post-State: 
 # After step 1, Tacker is installed and active in a docker container, and the 
-# test blueprint etc are prepared in a shared virtual folder /tmp/tacker.
+# test blueprint etc are prepared in a shared virtual folder /opt/tacker.
 # After step 2, the VNF is running and verified.
 # After step 3, the VNF is deleted and the system returned to step 1 post-state.
 # After step 4, the system returned to test pre-state.
@@ -68,10 +68,9 @@
 # How to use:
 #   $ git clone https://gerrit.opnfv.org/gerrit/models
 #   $ cd models/tests
-#   $ bash vHello_Tacker.sh [setup|run] [<openrc>] [<heat_host>] [branch]
+#   $ bash vHello_Tacker.sh [setup|run] [<openrc>] [branch]
 #     setup: setup test environment
 #     <openrc>: location of OpenStack openrc file
-#     <heat_host>: IP address of the Heat service
 #     branch: OpenStack branch to install (default: master)
 #   $ bash vHello_Tacker.sh [start|stop|clean]
 #     run: setup test environment and run test
@@ -132,16 +131,16 @@ try () {
 }
 
 setup () {
-  echo "$0: $(date) Setup temp test folder /tmp/tacker and copy this script there"
-  if [ -d /tmp/tacker ]; then sudo rm -rf /tmp/tacker; fi 
-  mkdir -p /tmp/tacker
-  chmod 777 /tmp/tacker/
-  cp $0 /tmp/tacker/.
-  cp $1 /tmp/tacker/admin-openrc.sh
-  source /tmp/tacker/admin-openrc.sh
-  echo "export HEAT_HOST=$2" >>/tmp/tacker/admin-openrc.sh
-  echo "export KEYSTONE_HOST=$(echo $OS_AUTH_URL | awk -F'[/]' '{print $3}')" >>/tmp/tacker/admin-openrc.sh
-  chmod 755 /tmp/tacker/*.sh
+  echo "$0: $(date) Setup temp test folder /opt/tacker and copy this script there"
+  if [ -d /opt/tacker ]; then sudo rm -rf /opt/tacker; fi 
+  sudo mkdir -p /opt/tacker
+  sudo chown $USER /opt/tacker
+  chmod 777 /opt/tacker/
+  cp $0 /opt/tacker/.
+  cp $1 /opt/tacker/admin-openrc.sh
+
+  source /opt/tacker/admin-openrc.sh
+  chmod 755 /opt/tacker/*.sh
 
   echo "$0: $(date) tacker-setup part 1"
   bash utils/tacker-setup.sh init
@@ -163,44 +162,44 @@ setup () {
     fi
 
     echo "$0: $(date) Execute tacker-setup.sh in the container"
-    sudo docker exec -it tacker /bin/bash /tmp/tacker/tacker-setup.sh setup $3
+    sudo docker exec -it tacker /bin/bash /opt/tacker/tacker-setup.sh setup $2
     if [ $? -eq 1 ]; then fail; fi
   else
     echo "$0: $(date) Execute tacker-setup.sh in the container"
-    sudo docker exec -i -t tacker /bin/bash /tmp/tacker/tacker-setup.sh setup $3
+    sudo docker exec -i -t tacker /bin/bash /opt/tacker/tacker-setup.sh setup $2
     if [ $? -eq 1 ]; then fail; fi
   fi
 
   assert "models-tacker-001 (Tacker installation in a docker container on the jumphost)" true 
 
   echo "$0: $(date) reset blueprints folder"
-  if [[ -d /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then rm -rf /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker; fi
-  mkdir -p /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker
+  if [[ -d /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then rm -rf /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker; fi
+  mkdir -p /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker
 
   echo "$0: $(date) copy tosca-vnfd-hello-world-tacker to blueprints folder"
-  cp -r blueprints/tosca-vnfd-hello-world-tacker /tmp/tacker/blueprints
+  cp -r blueprints/tosca-vnfd-hello-world-tacker /opt/tacker/blueprints
 }
 
 start() {
   echo "$0: $(date) setup OpenStack CLI environment"
-  source /tmp/tacker/admin-openrc.sh
+  source /opt/tacker/admin-openrc.sh
 
   echo "$0: $(date) Create Nova key pair"
-  if [[ -f /tmp/tacker/vHello ]]; then rm /tmp/tacker/vHello; fi
-  ssh-keygen -t rsa -N "" -f /tmp/tacker/vHello -C ubuntu@vHello
-  chmod 600 /tmp/tacker/vHello
-  openstack keypair create --public-key /tmp/tacker/vHello.pub vHello
+  if [[ -f /opt/tacker/vHello ]]; then rm /opt/tacker/vHello; fi
+  ssh-keygen -t rsa -N "" -f /opt/tacker/vHello -C ubuntu@vHello
+  chmod 600 /opt/tacker/vHello
+  openstack keypair create --public-key /opt/tacker/vHello.pub vHello
   assert "models-nova-001 (Keypair creation)" true 
 
   echo "$0: $(date) Inject public key into blueprint"
-  pubkey=$(cat /tmp/tacker/vHello.pub)
-  sed -i -- "s~<pubkey>~$pubkey~" /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker/blueprint.yaml
+  pubkey=$(cat /opt/tacker/vHello.pub)
+  sed -i -- "s~<pubkey>~$pubkey~" /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker/blueprint.yaml
 
   echo "$0: $(date) Get external network for Floating IP allocations"
   get_floating_net
 
   echo "$0: $(date) create VNFD"
-  cd /tmp/tacker/blueprints/tosca-vnfd-hello-world-tacker
+  cd /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker
   # newton: NAME (was "--name") is now a positional parameter
   tacker vnfd-create --vnfd-file blueprint.yaml hello-world-tacker
   assert "models-tacker-002 (VNFD creation)" [[ $? -eq 0 ]]
@@ -278,7 +277,7 @@ start() {
 
 stop() {
   echo "$0: $(date) setup OpenStack CLI environment"
-  source /tmp/tacker/admin-openrc.sh
+  source /opt/tacker/admin-openrc.sh
 
   echo "$0: $(date) uninstall vHello blueprint via CLI"
   vid=($(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do tacker vnf-delete ${id}; done
@@ -302,7 +301,7 @@ stop() {
 forward_to_container () {
   echo "$0: $(date) pass $1 command to vHello.sh in tacker container"
   CONTAINER=$(sudo docker ps -a | awk "/tacker/ { print \$1 }")
-  sudo docker exec $CONTAINER /bin/bash /tmp/tacker/vHello_Tacker.sh $1
+  sudo docker exec $CONTAINER /bin/bash /opt/tacker/vHello_Tacker.sh $1
   if [ $? -eq 1 ]; then fail; fi
 }
 
@@ -311,12 +310,12 @@ dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
 
 case "$1" in
   setup)
-    setup $2 $3 $4
+    setup $2 $3
     if [ $? -eq 1 ]; then fail; fi
     pass
     ;;
   run)
-    setup $2 $3 $4
+    setup $2 $3
     forward_to_container start
     if [ $? -eq 1 ]; then fail; fi
     pass
@@ -333,10 +332,10 @@ case "$1" in
   clean)
     echo "$0: $(date) Uninstall Tacker and test environment"
     forward_to_container stop
-    sudo docker exec -it tacker /bin/bash /tmp/tacker/tacker-setup.sh clean
+    sudo docker exec -it tacker /bin/bash /opt/tacker/tacker-setup.sh clean
     sudo docker stop tacker
     sudo docker rm -v tacker
-    if [ $? -eq 1 ]; then fail; fi
+    sudo rm -rf /opt/tacker
     pass
     ;;
   *)
