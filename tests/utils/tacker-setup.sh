@@ -14,8 +14,10 @@
 # limitations under the License.
 #
 # What this is: Setup script for the OpenStack Tacker VNF Manager starting from 
-# an Unbuntu Xenial docker container. This script is intended to be in an 
-# OPNFV environment, or an plain OpenStack environment (e.g. Devstack).
+# an Unbuntu Xenial docker container, on either an Ubuntu Xenial or Centos 7 
+# host. This script is intended to be used in an OPNFV environment, or a plain
+# OpenStack environment (e.g. Devstack).
+# This install procedure is intended to deploy Tacker for testing purposes only.
 #
 # Status: this is a work in progress, under test.
 #
@@ -23,7 +25,7 @@
 #   $ bash tacker-setup.sh [init|setup|clean] [branch]
 #     init: Initialize docker container
 #     setup: Setup of Tacker in the docker container
-#     clean: Clean
+#     clean: Remove the Tacker service, container, and data in /opt/tacker
 #     branch: OpenStack branch to install (default: master)
 
 trap 'fail' ERR
@@ -47,13 +49,13 @@ fail() {
 
 function setenv () {
   echo "$0: $(date) Setup shared virtual folders and save this script there"
-  mkdir /tmp/tacker
-  cp $0 /tmp/tacker/.
-  cp `dirname $0`/tacker/tacker.conf.sample /tmp/tacker/.
-  chmod 755 /tmp/tacker/*.sh
+  mkdir /opt/tacker
+  cp $0 /opt/tacker/.
+  cp `dirname $0`/tacker/tacker.conf.sample /opt/tacker/.
+  chmod 755 /opt/tacker/*.sh
 
   echo "$0: $(date) Setup admin-openrc.sh"
-  source /tmp/tacker/admin-openrc.sh
+  source /opt/tacker/admin-openrc.sh
 }
 
 function get_external_net () {
@@ -79,7 +81,7 @@ function create_container () {
     # xenial is needed for python 3.5
     sudo docker pull ubuntu:xenial
     sudo service docker start
-    sudo docker run -it -d -v /tmp/tacker/:/tmp/tacker --name tacker ubuntu:xenial /bin/bash
+    sudo docker run -it -d -v /opt/tacker/:/opt/tacker --name tacker ubuntu:xenial /bin/bash
   else 
     # Centos
     echo "Centos-based install"
@@ -95,7 +97,7 @@ EOF
     # xenial is needed for python 3.5
     sudo service docker start
     sudo docker pull ubuntu:xenial
-    sudo docker run -i -t -d -v /tmp/tacker/:/tmp/tacker --name tacker ubuntu:xenial /bin/bash
+    sudo docker run -i -t -d -v /opt/tacker/:/opt/tacker --name tacker ubuntu:xenial /bin/bash
   fi
 }
 
@@ -115,31 +117,29 @@ function setup () {
   echo "$0: $(date) Installing Tacker"
   # STEP 2: Install Tacker in the container
   # Per http://docs.openstack.org/developer/tacker/install/manual_installation.html
-  echo "$0: $(date) Install dependencies - OS specific"
-  if [ "$dist" == "Ubuntu" ]; then
-    apt-get update
-    apt-get install -y python
-    apt-get install -y python-dev
-    apt-get install -y python-pip
-    apt-get install -y wget
-    apt-get install -y openssh-server
-    apt-get install -y git
-    apt-get install -y apg
-    apt-get install -y libffi-dev
-    apt-get install -y libssl-dev
-    # newton: tacker uses ping for monitoring VIM (not in default docker containers)
-    apt-get install -y inetutils-ping
-    # apt-utils is not installed in xenial container image
-    apt-get install -y apt-utils
-    export MYSQL_PASSWORD=$(/usr/bin/apg -n 1 -m 16 -c cl_seed)
-    echo $MYSQL_PASSWORD >~/mysql
-    debconf-set-selections <<< 'mysql-server mysql-server/root_password password '$MYSQL_PASSWORD
-    debconf-set-selections <<< 'mysql-server mysql-server/root_password_again password '$MYSQL_PASSWORD
-    apt-get -q -y install mysql-server python-mysqldb
-    service mysql restart 
-  fi
+  echo "$0: $(date) Install dependencies"
+  apt-get update
+  apt-get install -y python
+  apt-get install -y python-dev
+  apt-get install -y python-pip
+  apt-get install -y wget
+  apt-get install -y openssh-server
+  apt-get install -y git
+  apt-get install -y apg
+  apt-get install -y libffi-dev
+  apt-get install -y libssl-dev
+  # newton: tacker uses ping for monitoring VIM (not in default docker containers)
+  apt-get install -y inetutils-ping
+  # apt-utils is not installed in xenial container image
+  apt-get install -y apt-utils
+  export MYSQL_PASSWORD=$(/usr/bin/apg -n 1 -m 16 -c cl_seed)
+  echo $MYSQL_PASSWORD >~/mysql
+  debconf-set-selections <<< 'mysql-server mysql-server/root_password password '$MYSQL_PASSWORD
+  debconf-set-selections <<< 'mysql-server mysql-server/root_password_again password '$MYSQL_PASSWORD
+  apt-get -q -y install mysql-server python-mysqldb
+  service mysql restart 
 
-  cd /tmp/tacker
+  cd /opt/tacker
 
   echo "$0: $(date) create Tacker database"
   mysql --user=root --password=$MYSQL_PASSWORD -e "CREATE DATABASE tacker; GRANT ALL PRIVILEGES ON tacker.* TO 'root@localhost' IDENTIFIED BY '"$MYSQL_PASSWORD"'; GRANT ALL PRIVILEGES ON tacker.* TO 'tacker'@'%' IDENTIFIED BY '"$MYSQL_PASSWORD"';"
@@ -154,7 +154,7 @@ function setup () {
 #  pip install --upgrade python-openstackclient python-glanceclient python-neutronclient keystonemiddleware
 
   echo "$0: $(date) Setup admin-openrc.sh"
-  source /tmp/tacker/admin-openrc.sh
+  source /opt/tacker/admin-openrc.sh
 
   uid=$(openstack user list | awk "/ tacker / { print \$2 }")
   if [[ $uid ]]; then
@@ -176,14 +176,14 @@ function setup () {
 
   echo "$0: $(date) Create Tacker service endpoint in OpenStack"
   ip=$(ip addr | awk "/ global eth0/ { print \$2 }" | sed -- 's/\/16//')
-  region=$(openstack endpoint list | awk "/ nova / { print \$4 }")
+  region=$(openstack endpoint list | awk "/ nova / { print \$4 }" | head -1)
   openstack endpoint create --region $region \
       --publicurl "http://$ip:9890/" \
       --adminurl "http://$ip:9890/" \
       --internalurl "http://$ip:9890/" $sid
 
   echo "$0: $(date) Clone Tacker"
-  if [[ -d /tmp/tacker/tacker ]]; then rm -rf /tmp/tacker/tacker; fi
+  if [[ -d /opt/tacker/tacker ]]; then rm -rf /opt/tacker/tacker; fi
   git clone git://git.openstack.org/openstack/tacker
   cd tacker
   git checkout $branch
@@ -202,7 +202,7 @@ function setup () {
 
   echo "$0: $(date) Update tacker.conf values"
   mkdir /usr/local/etc/tacker
-  cp /tmp/tacker/tacker.conf.sample /usr/local/etc/tacker/tacker.conf
+  cp /opt/tacker/tacker.conf.sample /usr/local/etc/tacker/tacker.conf
 
   # [DEFAULT] section (update)    
   sed -i -- 's/#auth_strategy = keystone/auth_strategy = keystone/' /usr/local/etc/tacker/tacker.conf
@@ -215,12 +215,11 @@ function setup () {
 
   # Not sure what the effect of the next line is, given that we are running as root in the container
   #sed -i -- "s~# root_helper = sudo~root_helper = sudo /usr/local/bin/tacker-rootwrap /usr/local/etc/tacker/rootwrap.conf~" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s~#api_paste_config = api-paste.ini~api_paste_config = /tmp/tacker/tacker/etc/tacker/api-paste.ini~" /usr/local/etc/tacker/tacker.conf
+  sed -i -- "s~#api_paste_config = api-paste.ini~api_paste_config = /opt/tacker/tacker/etc/tacker/api-paste.ini~" /usr/local/etc/tacker/tacker.conf
   sed -i -- "s/#bind_host = 0.0.0.0/bind_host = $ip/" /usr/local/etc/tacker/tacker.conf
   sed -i -- "s/#bind_port = 8888/bind_port = 9890/" /usr/local/etc/tacker/tacker.conf
 
 # Newton changes, based upon sample newton gate test conf file provided by sridhar_ram on #tacker
-  region=$(openstack endpoint list | awk "/ nova / { print \$4 }")
   sed -i -- "s/#nova_region_name = <None>/#nova_region_name = $region/" /usr/local/etc/tacker/tacker.conf
   sed -i -- "s/#nova_api_insecure = false/nova_api_insecure = False/" /usr/local/etc/tacker/tacker.conf
   sed -i -- "s/#nova_ca_certificates_file = <None>/nova_ca_certificates_file =/" /usr/local/etc/tacker/tacker.conf
@@ -274,11 +273,12 @@ EOF
     # < heat_uri = http://15.184.66.78:8004/v1
 
   # newton: add [tacker_heat] missing in generated tacker.conf.sample
+  heat_ipport=$(openstack endpoint show heat | awk "/ internalurl / { print \$4 }" | awk -F'[/]' '{print $3}')
   cat >>/usr/local/etc/tacker/tacker.conf <<EOF
 [tacker_heat]
 stack_retry_wait = 10
 stack_retries = 60
-heat_uri = http://$HEAT_HOST:8004/v1
+heat_uri = http://$heat_ipport/v1
 EOF
 
   # newton: add [database] missing in generated tacker.conf.sample
@@ -305,8 +305,8 @@ EOF
   /usr/local/bin/tacker-db-manage --config-file /usr/local/etc/tacker/tacker.conf upgrade head
 
   echo "$0: $(date) Install Tacker Client"
-  cd /tmp/tacker
-  if [[ -d /tmp/tacker/python-tackerclient ]]; then rm -rf /tmp/tacker/python-tackerclient; fi
+  cd /opt/tacker
+  if [[ -d /opt/tacker/python-tackerclient ]]; then rm -rf /opt/tacker/python-tackerclient; fi
   git clone https://github.com/openstack/python-tackerclient
   cd python-tackerclient
   git checkout $branch
@@ -314,7 +314,7 @@ EOF
 
   # deferred until its determined how to get this to Horizon
   #echo "$0: $(date) Install Tacker Horizon plugin"
-  #cd /tmp/tacker
+  #cd /opt/tacker
   #git clone https://github.com/openstack/tacker-horizon
   #cd tacker-horizon
   #python setup.py install
@@ -329,12 +329,13 @@ EOF
   sleep 30
 
   echo "$0: $(date) Register default VIM"
-  cd /tmp/tacker
+  cd /opt/tacker
   # TODO: bug in https://github.com/openstack/python-tackerclient/blob/stable/newton/tackerclient/common/utils.py
   # expects that there will be a port specified in the auth_url
   # TODO: bug: user_domain_name: Default is required even for identity v2
+  keystone_ipport=$(openstack endpoint show keystone | awk "/ internalurl / { print \$4 }" | awk -F'[/]' '{print $3}')
   cat <<EOF >vim-config.yaml 
-auth_url: http://$KEYSTONE_HOST:5000/identity/v2.0
+auth_url: http://$keystone_ipport/identity/v2.0
 username: $OS_USERNAME
 password: $OS_PASSWORD
 project_name: admin
@@ -395,7 +396,8 @@ function setup_test_environment () {
 }
 
 function clean () {
-  source /tmp/tacker/admin-openrc.sh
+  source /opt/tacker/admin-openrc.sh
+  eid=($(openstack endpoint list | awk "/tacker/ { print \$2 }")); for id in ${eid[@]}; do openstack endpoint delete ${id}; done
   openstack endpoint delete $(openstack endpoint list | awk "/tacker/ { print \$2 }")
   openstack user delete $(openstack user list | awk "/tacker/ { print \$2 }")
   openstack service delete $(openstack service list | awk "/tacker/ { print \$2 }")
