@@ -78,6 +78,18 @@ function create_container () {
   echo "$0: $(date) Setup container"
   if [ "$dist" == "Ubuntu" ]; then
     echo "$0: $(date) Ubuntu-based install"
+    dpkg -l docker-engine
+    if [[ $? -eq 1 ]]; then
+      sudo apt-get install -y apt-transport-https ca-certificates
+      sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+      echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" | sudo tee /etc/apt/sources.list.d/docker.list
+      sudo apt-get update
+      sudo apt-get purge lxc-docker
+      sudo apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual
+      sudo apt-get install -y docker-engine
+      sudo service docker start
+    fi
+
     # xenial is needed for python 3.5
     sudo docker pull ubuntu:xenial
     sudo service docker start
@@ -345,7 +357,7 @@ user_id: $(openstack user list | awk "/ admin / { print \$2 }")
 EOF
 
   # newton: NAME (was "--name") is now a positional parameter
-  tacker vim-register --config-file vim-config.yaml --description OpenStack VIM0
+  tacker vim-register --is-default --config-file vim-config.yaml --description OpenStack VIM0
   if [ $? -eq 1 ]; then fail; fi
 
   setup_test_environment
