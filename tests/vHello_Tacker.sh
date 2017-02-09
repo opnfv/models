@@ -23,7 +23,7 @@
 # as extended for testing of more Tacker-supported features as of OpenStack 
 # Newton.
 #
-# Pre-State: 
+# Prerequisites: 
 # This test can be run in either an OPNFV environment, or a plain OpenStack
 # environment (e.g. Devstack). 
 # For Devstack running in a VM on the host, you must first enable the host to 
@@ -35,8 +35,9 @@
 #      $ sudo route add -net 172.24.0.0/16 gw 192.168.122.112
 #      Sub your devstack Public network subnet for 172.24.0.0/16, and 
 #      your devstack VM IP address on the host for 192.168.122.112
-# For OPNFV-based tests, pre-requisites are
+# For OPNFV-based tests, prerequisites are
 #   1) models-joid-001 | models-apex-001 (installation of OPNFV system)
+#      The test may work, but has not been tested for other OPNFV installers.
 #
 # Test Steps and Assertions:
 # 1) bash vHello_Tacker.sh setup <openrc> [branch]
