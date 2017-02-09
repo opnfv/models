@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2016 AT&T Intellectual Property, Inc
+# Copyright 2016-2017 AT&T Intellectual Property, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 #
 # What this is: Deployment test for the Tacker Hello World blueprint.
 #
-# Status: work in progress, planned for OPNFV Danube release.
+# Status: this is a work in progress, under test.
 #
 # Use Case Description: A single-node simple python web server, connected to
 # two internal networks (private and admin), and accessible via a floating IP.
@@ -287,8 +287,6 @@ stop() {
   vid=($(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do try 10 10 "tacker vnfd-delete ${id}";  done
   assert "models-tacker-005 (VNFD deletion)" [[ -z "$(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')" ]]
 
-  for id in ${sg[@]}; do try 5 5 "openstack security group delete ${id}";  done
-
   iid=($(openstack image list|grep VNFImage|awk '{print $2}')); for id in ${iid[@]}; do openstack image delete ${id};  done
   assert "models-tacker-vnfd-004 (artifacts deletion)" [[ -z "$(openstack image list|grep VNFImage|awk '{print $2}')" ]]
 
@@ -340,11 +338,15 @@ case "$1" in
     pass
     ;;
   *)
-    echo "usage: bash vHello_Tacker.sh [setup|start|run|stop|clean]"
-    echo "setup: setup test environment"
-    echo "start: install blueprint and run test"
-    echo "run: setup test environment and run test"
-    echo "stop: stop test and uninstall blueprint"
-    echo "clean: cleanup after test"
+    echo "usage: "
+    echo "$ bash vHello_Tacker.sh [setup|run] [<openrc>] [branch]"
+    echo "  setup: setup test environment"
+    echo "  <openrc>: location of OpenStack openrc file"
+    echo "  branch: OpenStack branch to install (default: master)"
+    echo "$ bash vHello_Tacker.sh [start|stop|clean]"
+    echo "  run: setup test environment and run test"
+    echo "  start: install blueprint and run test"
+    echo "  stop: stop test and uninstall blueprint"
+    echo "  clean: cleanup after test"
     fail
 esac
