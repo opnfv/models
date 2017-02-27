@@ -52,7 +52,7 @@ topology_template:
           Hello World!<br>
           <a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
           <div>
-          <p>Instance ID fom config drive file /mnt/openstack/latest/meta_data.json></p>
+          <p>Instance ID from config drive file /mnt/openstack/latest/meta_data.json></p>
           <pre>
           $id
           </pre>

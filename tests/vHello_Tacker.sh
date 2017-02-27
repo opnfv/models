@@ -99,7 +99,7 @@ fail() {
 }
 
 assert() {
-  if [[ "$2" ]]; then echo "$0 test assertion passed: $1"
+  if [[ $2 == true ]]; then echo "$0 test assertion passed: $1"
   else 
     echo "$0 test assertion failed: $1"
     fail
@@ -122,8 +122,7 @@ get_floating_net () {
 try () {
   count=$1
   $3
-  while [[ $? -eq 1 && $count -gt 0 ]] 
-  do 
+  while [[ $? == 1 && $count > 0 ]]; do 
     sleep $2
     let count=$count-1
     $3
@@ -172,9 +171,13 @@ setup () {
   fi
 
   assert "models-tacker-001 (Tacker installation in a docker container on the jumphost)" true 
+}
 
+copy_blueprint() {
   echo "$0: $(date) reset blueprints folder"
-  if [[ -d /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then rm -rf /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker; fi
+  if [[ -d /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then
+    rm -rf /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker
+  fi
   mkdir -p /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker
 
   echo "$0: $(date) copy tosca-vnfd-hello-world-tacker to blueprints folder"
@@ -203,7 +206,12 @@ start() {
   cd /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker
   # newton: NAME (was "--name") is now a positional parameter
   tacker vnfd-create --vnfd-file blueprint.yaml hello-world-tacker
-  assert "models-tacker-002 (VNFD creation)" [[ $? -eq 0 ]]
+  if [[ $? -eq 0 ]]; then 
+    assert "models-tacker-002 (VNFD creation)" true
+  else
+    assert "models-tacker-002 (VNFD creation)" false
+  fi
+
 
   echo "$0: $(date) create VNF"
   # newton: NAME (was "--name") is now a positional parameter
@@ -212,16 +220,22 @@ start() {
 
   echo "$0: $(date) wait for hello-world-tacker to go ACTIVE"
   active=""
-  while [[ -z $active ]]
+  count=60
+  while [[ -z $active && $count -gt 0 ]]
   do
     active=$(tacker vnf-show hello-world-tacker | grep ACTIVE)
     if [[ $(tacker vnf-show hello-world-tacker | grep -c ERROR) > 0 ]]; then 
       echo "$0: $(date) hello-world-tacker VNF creation failed with state ERROR"
       assert "models-tacker-002 (VNF creation)" false
     fi
+    let count=$count-1
     sleep 10
     echo "$0: $(date) wait for hello-world-tacker to go ACTIVE"
   done
+  if [[ $count == 0 ]]; then 
+    echo "$0: $(date) hello-world-tacker VNF creation failed - timed out"
+    assert "models-tacker-002 (VNF creation)" false
+  fi
   assert "models-tacker-002 (VNF creation)" true 
 
   # Setup for workarounds
@@ -279,16 +293,34 @@ start() {
 stop() {
   echo "$0: $(date) setup OpenStack CLI environment"
   source /opt/tacker/admin-openrc.sh
+set -x
+  # It can take some time to delete a VNF - thus wait 2 minutes
+  if [[ "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')" != '' ]]; then
+    echo "$0: $(date) uninstall vHello blueprint via CLI"
+    try 12 10 "tacker vnf-delete hello-world-tacker"
+    if [[ "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')" == '' ]]; then
+      assert "models-tacker-004 (VNF deletion)" true
+    else
+      assert "models-tacker-004 (VNF deletion)" false
+    fi
+  fi
 
-  echo "$0: $(date) uninstall vHello blueprint via CLI"
-  vid=($(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do tacker vnf-delete ${id}; done
-  assert "models-tacker-004 (VNF deletion)" [[ -z "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')" ]]
-
-  vid=($(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')); for id in ${vid[@]}; do try 10 10 "tacker vnfd-delete ${id}";  done
-  assert "models-tacker-005 (VNFD deletion)" [[ -z "$(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')" ]]
+  # It can take some time to delete a VNFD - thus wait 2 minutes
+  if [[ "$(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')" != '' ]]; then
+    try 12 10 "tacker vnfd-delete hello-world-tacker"
+    if [[ "$(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')" == '' ]]; then
+      assert "models-tacker-005 (VNFD deletion)" true
+    else
+      assert "models-tacker-005 (VNFD deletion)" false
+    fi
+  fi
 
   iid=($(openstack image list|grep VNFImage|awk '{print $2}')); for id in ${iid[@]}; do openstack image delete ${id};  done
-  assert "models-tacker-vnfd-004 (artifacts deletion)" [[ -z "$(openstack image list|grep VNFImage|awk '{print $2}')" ]]
+  if [[ "$(openstack image list|grep VNFImage|awk '{print $2}')" == '' ]]; then
+    assert "models-tacker-vnfd-004 (artifacts deletion)" true
+  else
+    assert "models-tacker-vnfd-004 (artifacts deletion)" false
+  fi
 
   # Cleanup for workarounds
   fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
@@ -315,15 +347,26 @@ case "$1" in
     ;;
   run)
     setup $2 $3
+    copy_blueprint
     forward_to_container start
     if [ $? -eq 1 ]; then fail; fi
     pass
     ;;
-  start|stop)
+  start)
     if [[ -f /.dockerenv ]]; then
-      $1
+      start
     else
-      forward_to_container $1
+      copy_blueprint
+      forward_to_container start
+    fi
+    if [ $? -eq 1 ]; then fail; fi
+    pass
+    ;;
+  stop)
+    if [[ -f /.dockerenv ]]; then
+      stop
+    else
+      forward_to_container stop
     fi
     if [ $? -eq 1 ]; then fail; fi
     pass
