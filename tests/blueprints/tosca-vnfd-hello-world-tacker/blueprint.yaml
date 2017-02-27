@@ -12,7 +12,7 @@ topology_template:
       artifacts:
         VNFImage:
           type: tosca.artifacts.Deployment.Image.VM
-          file: http://cloud-images.ubuntu.com/releases/xenial/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img
+          file: https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
       capabilities:
         nfv_compute:
           properties:
@@ -50,12 +50,13 @@ topology_template:
           </head>
           <body>
           Hello World!<br>
-          <a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
+          <a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/wp-content/uploads/2016/11/opnfv_logo_wp.png"></a>
           <div>
-          <p>Instance ID fom config drive file /mnt/openstack/latest/meta_data.json></p>
+          <p>Instance ID from config drive file /mnt/openstack/latest/meta_data.json></p>
           <pre>
           $id
           </pre>
+          <p>Server setup completed at $(date)</p>
           </div>
           </body></html>
           EOM
