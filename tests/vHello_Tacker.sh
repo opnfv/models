@@ -35,6 +35,9 @@
 #      $ sudo route add -net 172.24.0.0/16 gw 192.168.122.112
 #      Sub your devstack Public network subnet for 172.24.0.0/16, and 
 #      your devstack VM IP address on the host for 192.168.122.112
+#   Also you may need to ensure that nested virtualization is enabled, e.g. in 
+#   virt-manager, enable "Copy host CPU confguraton" for the devstack VM.
+#
 # For OPNFV-based tests, prerequisites are
 #   1) models-joid-001 | models-apex-001 (installation of OPNFV system)
 #      The test may work, but has not been tested for other OPNFV installers.
@@ -292,7 +295,7 @@ start() {
 stop() {
   echo "$0: $(date) setup OpenStack CLI environment"
   source /opt/tacker/admin-openrc.sh
-set -x
+
   if [[ "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')" != '' ]]; then
     echo "$0: $(date) uninstall vHello blueprint via CLI"
     try 12 10 "tacker vnf-delete hello-world-tacker"
