@@ -3,8 +3,9 @@
 .. http://creativecommons.org/licenses/by/4.0
 .. (c) 2015-2017 AT&T Intellectual Property, Inc
 
-Use Cases
-=========
+======================
+OPNFV Models Use Cases
+======================
 
 Implemented in Current Release
 ------------------------------
@@ -16,13 +17,6 @@ Based upon the OpenStack Tacker project's "tosca-vnfd-hello-world" blueprint,
 as extended for testing of more Tacker-supported features as of OpenStack Newton.
 A single-node simple python web server, connected to two internal networks
 (private and admin), and accessible via a floating IP.
-
-
-Cloudify Hello World
-....................
-
-Deployment test for the Cloudify Hello World blueprint
-
 
 A complete list of use cases is located on the
 `Models Testing <https://wiki.opnfv.org/display/models/Testing>`_ wiki page.
