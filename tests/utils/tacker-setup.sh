@@ -268,13 +268,14 @@ function setup () {
   # (not referenced) cafile = /opt/stack/data/ca-bundle.pem
   # (not referenced) auth_uri = http://15.184.66.78/identity
   # auth_uri is required for keystonemiddleware.auth_token use of public identity endpoint
+  # removed due to issues with "ERROR oslo_middleware.catch_errors DiscoveryFailure: Cannot use v2 authentication with domain scope"
+    # project_domain_name = Default
+    # user_domain_name = Default
   cat >>/usr/local/etc/tacker/tacker.conf <<EOF
 [keystone_authtoken]
 auth_uri = $(openstack endpoint show keystone | awk "/ publicurl / { print \$4 }")
 auth_url = $(openstack endpoint show keystone | awk "/ internalurl / { print \$4 }")
-project_domain_name = Default
 project_name = $service_project
-user_domain_name = Default
 password = tacker
 username = tacker
 auth_type = password
@@ -345,15 +346,16 @@ EOF
   # TODO: bug in https://github.com/openstack/python-tackerclient/blob/stable/newton/tackerclient/common/utils.py
   # expects that there will be a port specified in the auth_url
   # TODO: bug: user_domain_name: Default is required even for identity v2
+  # removed due to issues with "DiscoveryFailure" as above
+    # project_domain_name: Default
+    # user_domain_name: Default
   keystone_ipport=$(openstack endpoint show keystone | awk "/ internalurl / { print \$4 }" | awk -F'[/]' '{print $3}')
   cat <<EOF >vim-config.yaml 
-auth_url: http://$keystone_ipport/identity/v2.0
+auth_url: $OS_AUTH_URL
 username: $OS_USERNAME
 password: $OS_PASSWORD
 project_id: $OS_TENANT_ID
 project_name: admin
-project_domain_name: Default
-user_domain_name: Default
 user_id: $(openstack user list | awk "/ admin / { print \$2 }")
 EOF
 
