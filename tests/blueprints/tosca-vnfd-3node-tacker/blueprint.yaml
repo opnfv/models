@@ -9,6 +9,10 @@ topology_template:
   node_templates:
     VDU1:
       type: tosca.nodes.nfv.VDU.Tacker
+      artifacts:
+        VNFImage:
+          type: tosca.artifacts.Deployment.Image.VM
+          file: https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
       capabilities:
         nfv_compute:
           properties:
@@ -16,9 +20,58 @@ topology_template:
             mem_size: 1024 MB
             disk_size: 4 GB
       properties:
-        image: models-xenial-server
         availability_zone: nova
         mgmt_driver: noop
+        config_drive: true
+        user_data_format: RAW
+        user_data: |
+          #!/bin/bash
+          set -x
+          mkdir /home/ubuntu
+          chown -R ubuntu /home/ubuntu
+          sudo mount /dev/sr0 /mnt/
+          mkdir ~/www
+          mkdir ~/www/html
+          cat > ~/www/Dockerfile <<EOM
+          FROM nginx
+          COPY html /usr/share/nginx/html
+          EOM
+          host=$(hostname)
+          id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json)
+          cat << EOM | sudo tee index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+          <title>Hello World!</title>
+          <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1"/>
+          <style>
+          body { width: 100%; background-color: white; color: black; padding: 0px; margin: 0px; font-family: sans-serif; font-size:100%; }
+          </style>
+          </head>
+          <body>
+          <large>Welcome to OPNFV @ $host!</large><br/>
+          <a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
+          <div>
+          <p>Instance ID fom config drive file /mnt/openstack/latest/meta_data.json></p>
+          <pre>
+          $id
+          </pre>
+          <p>Server setup completed at $(date)</p>
+          </div>
+          </body></html>
+          EOM
+          wget https://git.opnfv.org/cgit/models/plain/tests/blueprints/tosca-vnfd-hello-ves/favicon.ico -O  ~/www/html/favicon.ico
+          sudo apt-get install apt-transport-https ca-certificates
+          sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+          echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" | sudo tee /etc/apt/sources.list.d/docker.list
+          sudo apt-get update
+          sudo apt-get purge lxc-docker
+          sudo apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual
+          sudo apt-get install -y docker-engine
+          sudo docker pull nginx
+          cd ~/www
+          sudo docker build -t vhello .
+          sudo docker run --name vHello -d -p 80:80 vhello
         config: |
           param0: key1
           param1: key2
@@ -46,6 +99,10 @@ topology_template:
 
     VDU2:
       type: tosca.nodes.nfv.VDU.Tacker
+      artifacts:
+        VNFImage:
+          type: tosca.artifacts.Deployment.Image.VM
+          file: https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
       capabilities:
         nfv_compute:
           properties:
@@ -53,9 +110,58 @@ topology_template:
             mem_size: 1024 MB
             disk_size: 4 GB
       properties:
-        image: models-xenial-server
         availability_zone: nova
         mgmt_driver: noop
+        config_drive: true
+        user_data_format: RAW
+        user_data: |
+          #!/bin/bash
+          set -x
+          mkdir /home/ubuntu
+          chown -R ubuntu /home/ubuntu
+          sudo mount /dev/sr0 /mnt/
+          mkdir ~/www
+          mkdir ~/www/html
+          cat > ~/www/Dockerfile <<EOM
+          FROM nginx
+          COPY html /usr/share/nginx/html
+          EOM
+          host=$(hostname)
+          id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json)
+          cat << EOM | sudo tee index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+          <title>Hello World!</title>
+          <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1"/>
+          <style>
+          body { width: 100%; background-color: white; color: black; padding: 0px; margin: 0px; font-family: sans-serif; font-size:100%; }
+          </style>
+          </head>
+          <body>
+          <large>Welcome to OPNFV @ $host!</large><br/>
+          <a href="http://wiki.opnfv.org"><img src="https://www.opnfv.org/sites/all/themes/opnfv/logo.png"></a>
+          <div>
+          <p>Instance ID fom config drive file /mnt/openstack/latest/meta_data.json></p>
+          <pre>
+          $id
+          </pre>
+          <p>Server setup completed at $(date)</p>
+          </div>
+          </body></html>
+          EOM
+          wget https://git.opnfv.org/cgit/models/plain/tests/blueprints/tosca-vnfd-hello-ves/favicon.ico -O  ~/www/html/favicon.ico
+          sudo apt-get install apt-transport-https ca-certificates
+          sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+          echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" | sudo tee /etc/apt/sources.list.d/docker.list
+          sudo apt-get update
+          sudo apt-get purge lxc-docker
+          sudo apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual
+          sudo apt-get install -y docker-engine
+          sudo docker pull nginx
+          cd ~/www
+          sudo docker build -t vhello .
+          sudo docker run --name vHello -d -p 80:80 vhello
         config: |
           param0: key1
           param1: key2
@@ -83,6 +189,10 @@ topology_template:
 
     VDU3:
       type: tosca.nodes.nfv.VDU.Tacker
+      artifacts:
+        VNFImage:
+          type: tosca.artifacts.Deployment.Image.VM
+          file: https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
       capabilities:
         nfv_compute:
           properties:
@@ -90,9 +200,17 @@ topology_template:
             mem_size: 1024 MB
             disk_size: 4 GB
       properties:
-        image: models-xenial-server
         availability_zone: nova
         mgmt_driver: noop
+        user_data_format: RAW
+        user_data: |
+          #!/bin/bash
+          set -x
+          echo "1" | sudo tee /proc/sys/net/ipv4/ip_forward
+          sudo sysctl net.ipv4.ip_forward=1
+          sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state --state NEW -m statistic --mode nth --every 2 --packet 0 -j DNAT --to-destination <vdu1_ip>:80
+          sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state --state NEW -m statistic --mode nth --every 2 --packet 0 -j DNAT --to-destination <vdu2_ip>:80
+          sudo iptables -t nat -A POSTROUTING -j MASQUERADE
         config: |
           param0: key1
           param1: key2
