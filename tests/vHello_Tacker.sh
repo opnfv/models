@@ -262,7 +262,7 @@ start() {
 
   echo "$0: $(date) associate floating IP"
   get_floating_net
-  FIP=$(nova floating-ip-create $FLOATING_NETWORK_NAME | awk "/public/ { print \$4 }")
+  FIP=$(nova floating-ip-create $FLOATING_NETWORK_NAME | awk "/$FLOATING_NETWORK_NAME/ { print \$4 }")
   nova floating-ip-associate $SERVER_ID $FIP
   # End setup for workarounds
 
