@@ -350,6 +350,7 @@ EOF
 auth_url: http://$keystone_ipport/identity/v2.0
 username: $OS_USERNAME
 password: $OS_PASSWORD
+project_id: $OS_TENANT_ID
 project_name: admin
 project_domain_name: Default
 user_domain_name: Default
