@@ -424,6 +424,7 @@ function clean () {
   pid=($(neutron router-port-list vnf_private_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_private_router vnf_private;  done
   neutron router-delete vnf_private_router
   neutron net-delete vnf_private
+  pass
 }
 
 start=`date +%s`
