@@ -135,6 +135,7 @@ try () {
 }
 
 setup () {
+  trap 'fail' ERR
   echo "$0: $(date) Setup temp test folder /opt/tacker and copy this script there"
   if [ -d /opt/tacker ]; then sudo rm -rf /opt/tacker; fi 
   sudo mkdir -p /opt/tacker
@@ -178,18 +179,19 @@ setup () {
 }
 
 say_hello() {
+  echo "$0: $(date) Testing $1"
   pass=false
   count=6
-  while [[ $count -gt 0 && ! $pass ]] 
+  while [[ $count > 0 && $pass != true ]] 
   do 
     sleep 10
     let count=$count-1
-    if [[ $(curl $1} | grep -c "Hello World") > 0 ]]; then
+    if [[ $(curl $1 | grep -c "Hello World") > 0 ]]; then
       echo "$0: $(date) Hello World found at $1"
       pass=true
     fi
   done
-  if [[ ! $pass ]]; then fail; fi
+  if [[ $pass != true ]]; then fail; fi
 }
 
 copy_blueprint() {
@@ -199,14 +201,27 @@ copy_blueprint() {
   fi
 
   echo "$0: $(date) copy tosca-vnfd-3node-tacker to blueprints folder"
-  cp -r blueprints/tosca-vnfd-3node-tacker /opt/tacker/blueprints
+  cp -r blueprints/tosca-vnfd-3node-tacker /opt/tacker/blueprints/tosca-vnfd-3node-tacker
   cp $0 /opt/tacker/.
 }
 
 
 start() {
+  trap 'fail' ERR
+
   echo "$0: $(date) setup OpenStack CLI environment"
   source /opt/tacker/admin-openrc.sh
+
+  echo "$0: $(date) Create Nova key pair"
+  if [[ -f /opt/tacker/vHello ]]; then rm /opt/tacker/vHello; fi
+  ssh-keygen -t rsa -N "" -f /opt/tacker/vHello -C ubuntu@vHello
+  chmod 600 /opt/tacker/vHello
+  openstack keypair create --public-key /opt/tacker/vHello.pub vHello
+  assert "models-nova-001 (Keypair creation)" true 
+
+  echo "$0: $(date) Inject public key into blueprint"
+  pubkey=$(cat /opt/tacker/vHello.pub)
+  sed -i -- "s~<pubkey>~$pubkey~g" /opt/tacker/blueprints/tosca-vnfd-3node-tacker/blueprint.yaml
 
   vdus="VDU1 VDU2 VDU3"
   vdui="1 2 3"
@@ -218,12 +233,13 @@ start() {
   echo "$0: $(date) allocate floating IPs"
   get_floating_net
   for i in $vdui; do
-    vdu_ip[$i]=$(nova floating-ip-create $FLOATING_NETWORK_NAME | awk "/public/ { print \$4 }")
+    vdu_ip[$i]=$(nova floating-ip-create $FLOATING_NETWORK_NAME | awk "/$FLOATING_NETWORK_NAME/ { print \$4 }")
+    echo "$0: $(date) Pre-allocated ${vdu_ip[$i]} to VDU$i"
   done
 
   echo "$0: $(date) Inject web server floating IPs into LB code in blueprint"
-  sed -i -- "s/<vdu1_ip>/$vdu_ip[1]/" /opt/tacker/blueprints/tosca-vnfd-3node-tacker/blueprint.yaml
-  sed -i -- "s/<vdu2_ip>/$vdu_ip[2]/" /opt/tacker/blueprints/tosca-vnfd-3node-tacker/blueprint.yaml
+  sed -i -- "s/<vdu1_ip>/${vdu_ip[1]}/" /opt/tacker/blueprints/tosca-vnfd-3node-tacker/blueprint.yaml
+  sed -i -- "s/<vdu2_ip>/${vdu_ip[2]}/" /opt/tacker/blueprints/tosca-vnfd-3node-tacker/blueprint.yaml
   # End setup for workarounds
 
   echo "$0: $(date) create VNFD"
@@ -278,6 +294,8 @@ start() {
   neutron security-group-rule-create --direction ingress --protocol TCP --port-range-min 22 --port-range-max 22 vHello
   neutron security-group-rule-create --direction ingress --protocol TCP --port-range-min 80 --port-range-max 80 vHello
   for i in $vdui; do
+    vdu_id[$i]=$(openstack server list | awk "/VDU$i/ { print \$2 }")
+    echo "$0: $(date) Assigning security groups to VDU$i (${vdu_id[$i]})"    
     openstack server add security group ${vdu_id[$i]} vHello
     openstack server add security group ${vdu_id[$i]} default
   done
@@ -300,6 +318,8 @@ start() {
 }
 
 stop() {
+  trap 'fail' ERR
+
   echo "$0: $(date) setup OpenStack CLI environment"
   source /opt/tacker/admin-openrc.sh
 
@@ -310,8 +330,9 @@ stop() {
     if [[ ! -z $id ]]; then
       echo "$0: $(date) disassociate floating ip for $vdu"
       nova floating-ip-disassociate $id $ip
+    else
+      echo "$0: $(date) No instance for $vdu found"
     fi
-    echo "$0: $(date) No instance for $vdu found"
   done
 
   if [[ "$(tacker vnf-list|grep hello-3node|awk '{print $2}')" != '' ]]; then
