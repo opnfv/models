@@ -262,7 +262,7 @@ start() {
 
   echo "$0: $(date) associate floating IP"
   get_floating_net
-  FIP=$(nova floating-ip-create $FLOATING_NETWORK_NAME | awk "/public/ { print \$4 }")
+  FIP=$(nova floating-ip-create $FLOATING_NETWORK_NAME | awk "/$FLOATING_NETWORK_NAME/ { print \$4 }")
   nova floating-ip-associate $SERVER_ID $FIP
   # End setup for workarounds
 
@@ -289,7 +289,11 @@ start() {
 
   echo "$0: $(date) verify contents of config drive are included in web page"
   id=$(curl $SERVER_URL | awk "/uuid/ { print \$2 }")
-  assert "models-tacker-vnfd-001 (config_drive creation)" [[ ! -z "$id" ]]
+  if [[ ! -z $id ]]; then
+    assert "models-tacker-vnfd-001 (config_drive creation)" true
+  else
+    assert "models-tacker-vnfd-001 (config_drive creation)" false
+  fi
 }
 
 stop() {
