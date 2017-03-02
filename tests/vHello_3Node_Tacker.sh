@@ -263,7 +263,8 @@ start() {
 
   # Workarounds
   echo "$0: $(date) directly set port security on ports (bug/unsupported in Mitaka Tacker?)"
-  for vdu in vdus; do
+  for vdu in $vdus; do
+    echo "$0: $(date) Setting port security on $vdu"  
     SERVER_ID=$(openstack server list | awk "/$vdu/ { print \$2 }")
     id=($(neutron port-list|grep -v "+"|grep -v name|awk '{print $2}'))
     for id in ${id[@]}; do
