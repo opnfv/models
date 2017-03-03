@@ -192,7 +192,7 @@ function setup () {
   openstack endpoint create --region $region \
       --publicurl "http://$ip:9890/" \
       --adminurl "http://$ip:9890/" \
-      --internalurl "http://$ip:9890/" $sid
+      --internalurl "http://$ip:9890/" nfv-orchestration
 
   echo "$0: $(date) Clone Tacker"
   if [[ -d /opt/tacker/tacker ]]; then rm -rf /opt/tacker/tacker; fi

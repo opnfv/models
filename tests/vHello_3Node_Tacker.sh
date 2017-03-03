@@ -136,16 +136,23 @@ try () {
 
 setup () {
   trap 'fail' ERR
-  echo "$0: $(date) Setup temp test folder /opt/tacker and copy this script there"
+
+  echo "$0: $(date) Setup shared test folder /opt/tacker"
   if [ -d /opt/tacker ]; then sudo rm -rf /opt/tacker; fi 
   sudo mkdir -p /opt/tacker
   sudo chown $USER /opt/tacker
   chmod 777 /opt/tacker/
+
+  echo "$0: $(date) copy test script and openrc to /opt/tacker"
   cp $0 /opt/tacker/.
   cp $1 /opt/tacker/admin-openrc.sh
 
   source /opt/tacker/admin-openrc.sh
   chmod 755 /opt/tacker/*.sh
+
+  echo "$0: $(date) Create image models-xenial-server"
+  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
+  if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --location http://cloud-images.ubuntu.com/releases/xenial/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img --container-format bare; fi
 
   echo "$0: $(date) tacker-setup part 1"
   bash utils/tacker-setup.sh init
@@ -181,10 +188,10 @@ setup () {
 say_hello() {
   echo "$0: $(date) Testing $1"
   pass=false
-  count=6
+  count=10
   while [[ $count > 0 && $pass != true ]] 
   do 
-    sleep 10
+    sleep 30
     let count=$count-1
     if [[ $(curl $1 | grep -c "Hello World") > 0 ]]; then
       echo "$0: $(date) Hello World found at $1"
@@ -195,6 +202,9 @@ say_hello() {
 }
 
 copy_blueprint() {
+  echo "$0: $(date) copy test script to /opt/tacker"
+  cp $0 /opt/tacker/.
+
   echo "$0: $(date) reset blueprints folder"
   if [[ -d /opt/tacker/blueprints/tosca-vnfd-3node-tacker ]]; then 
     rm -rf /opt/tacker/blueprints/tosca-vnfd-3node-tacker
@@ -207,7 +217,8 @@ copy_blueprint() {
 
 
 start() {
-  trap 'fail' ERR
+#  Disable trap for now, need to test to ensure premature fail does not occur
+#  trap 'fail' ERR
 
   echo "$0: $(date) setup OpenStack CLI environment"
   source /opt/tacker/admin-openrc.sh
@@ -310,8 +321,18 @@ start() {
   vdu_url[2]="http://${vdu_ip[2]}"
   vdu_url[3]="http://${vdu_ip[2]}"
 
-  echo "$0: $(date) verify vHello server is running at each web server and via the LB"
   apt-get install -y curl
+
+  count=0
+  resp=$(curl http://${vdu_ip[1]})
+  while [[ $count < 10 && "$resp" == "" ]]; do
+    echo "$0: $(date) waiting for web server at VDU1 to startup"
+    sleep 60
+    let count=$count+1
+    resp=$(curl http://${vdu_ip[1]})
+  done
+     
+  echo "$0: $(date) verify vHello server is running at each web server and via the LB"
   say_hello http://${vdu_ip[1]}
   say_hello http://${vdu_ip[2]}
   say_hello http://${vdu_ip[3]}
@@ -363,15 +384,16 @@ stop() {
   else echo "$0: $(date) No hello-3node VNFD found"
   fi
 
-  if [[ ! -z $(openstack image list|grep VNFImage|awk '{print $2}') ]]; then
-    iid=($(openstack image list|grep VNFImage|awk '{print $2}')); for id in ${iid[@]}; do openstack image delete ${id};  done
-    if [[ "$(openstack image list|grep VNFImage|awk '{print $2}')" == '' ]]; then
-      assert "models-tacker-vnfd-004 (artifacts deletion)" true
-    else
-      assert "models-tacker-vnfd-004 (artifacts deletion)" false
-    fi
-  else echo "$0: $(date) No VNFImage found"
-  fi
+# This part will apply for tests that dynamically create the VDU base image
+#  if [[ ! -z $(openstack image list|grep VNFImage|awk '{print $2}') ]]; then
+#    iid=($(openstack image list|grep VNFImage|awk '{print $2}')); for id in ${iid[@]}; do openstack image delete ${id};  done
+#    if [[ "$(openstack image list|grep VNFImage|awk '{print $2}')" == '' ]]; then
+#      assert "models-tacker-vnfd-004 (artifacts deletion)" true
+#    else
+#      assert "models-tacker-vnfd-004 (artifacts deletion)" false
+#    fi
+#  else echo "$0: $(date) No VNFImage found"
+#  fi
 
   # Cleanup for workarounds
   fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done

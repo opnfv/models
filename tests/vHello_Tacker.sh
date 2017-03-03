@@ -134,16 +134,24 @@ try () {
 }
 
 setup () {
-  echo "$0: $(date) Setup temp test folder /opt/tacker and copy this script there"
+  trap 'fail' ERR
+
+  echo "$0: $(date) Setup shared test folder /opt/tacker"
   if [ -d /opt/tacker ]; then sudo rm -rf /opt/tacker; fi 
   sudo mkdir -p /opt/tacker
   sudo chown $USER /opt/tacker
   chmod 777 /opt/tacker/
+
+  echo "$0: $(date) copy test script and openrc to /opt/tacker"
   cp $0 /opt/tacker/.
   cp $1 /opt/tacker/admin-openrc.sh
 
   source /opt/tacker/admin-openrc.sh
   chmod 755 /opt/tacker/*.sh
+
+  echo "$0: $(date) Create image models-xenial-server"
+  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
+  if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --location http://cloud-images.ubuntu.com/releases/xenial/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img --container-format bare; fi
 
   echo "$0: $(date) tacker-setup part 1"
   bash utils/tacker-setup.sh init
@@ -177,6 +185,9 @@ setup () {
 }
 
 copy_blueprint() {
+  echo "$0: $(date) copy test script to /opt/tacker"
+  cp $0 /opt/tacker/.
+
   echo "$0: $(date) reset blueprints folder"
   if [[ -d /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then
     rm -rf /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker
@@ -188,6 +199,9 @@ copy_blueprint() {
 }
 
 start() {
+#  Disable trap for now, need to test to ensure premature fail does not occur
+#  trap 'fail' ERR
+
   echo "$0: $(date) setup OpenStack CLI environment"
   source /opt/tacker/admin-openrc.sh
 
@@ -270,7 +284,7 @@ start() {
   SERVER_IP=$(openstack server show $SERVER_ID | awk "/ addresses / { print \$6 }")
   SERVER_URL="http://$SERVER_IP"
 
-  echo "$0: $(date) wait 30 seconds for vHello server to startup"
+  echo "$0: $(date) wait 30 seconds for vHello server to startup at $SERVER_URL"
   sleep 30
 
   echo "$0: $(date) verify vHello server is running"
@@ -297,6 +311,8 @@ start() {
 }
 
 stop() {
+  trap 'fail' ERR
+
   echo "$0: $(date) setup OpenStack CLI environment"
   source /opt/tacker/admin-openrc.sh
 
@@ -306,6 +322,7 @@ stop() {
     # It can take some time to delete a VNF - thus wait 2 minutes
     count=12
     while [[ $count > 0 && "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')" != '' ]]; do 
+      echo "$0: $(date) waiting for hello-world-tacker VNF delete to complete"
       sleep 10
       let count=$count-1
     done 
@@ -318,6 +335,7 @@ stop() {
 
   # It can take some time to delete a VNFD - thus wait 2 minutes
   if [[ "$(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')" != '' ]]; then
+    echo "$0: $(date) trying to delete the hello-world-tacker VNFD"
     try 12 10 "tacker vnfd-delete hello-world-tacker"
     if [[ "$(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')" == '' ]]; then
       assert "models-tacker-005 (VNFD deletion)" true
@@ -326,12 +344,13 @@ stop() {
     fi
   fi
 
-  iid=($(openstack image list|grep VNFImage|awk '{print $2}')); for id in ${iid[@]}; do openstack image delete ${id};  done
-  if [[ "$(openstack image list|grep VNFImage|awk '{print $2}')" == '' ]]; then
-    assert "models-tacker-vnfd-004 (artifacts deletion)" true
-  else
-    assert "models-tacker-vnfd-004 (artifacts deletion)" false
-  fi
+# This part will apply for tests that dynamically create the VDU base image
+#  iid=($(openstack image list|grep VNFImage|awk '{print $2}')); for id in ${iid[@]}; do openstack image delete ${id};  done
+#  if [[ "$(openstack image list|grep VNFImage|awk '{print $2}')" == '' ]]; then
+#    assert "models-tacker-vnfd-004 (artifacts deletion)" true
+#  else
+#    assert "models-tacker-vnfd-004 (artifacts deletion)" false
+#  fi
 
   # Cleanup for workarounds
   fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done

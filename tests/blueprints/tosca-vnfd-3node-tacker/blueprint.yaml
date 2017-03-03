@@ -9,10 +9,6 @@ topology_template:
   node_templates:
     VDU1:
       type: tosca.nodes.nfv.VDU.Tacker
-      artifacts:
-        VNFImage:
-          type: tosca.artifacts.Deployment.Image.VM
-          file: http://cloud-images.ubuntu.com/releases/xenial/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img
       capabilities:
         nfv_compute:
           properties:
@@ -20,6 +16,7 @@ topology_template:
             mem_size: 1024 MB
             disk_size: 4 GB
       properties:
+        image: models-xenial-server
         availability_zone: nova
         mgmt_driver: noop
         config_drive: true
@@ -34,15 +31,16 @@ topology_template:
           <pubkey>
           EOM
           sudo mount /dev/sr0 /mnt/
-          mkdir ~/www
-          mkdir ~/www/html
-          cat > ~/www/Dockerfile <<EOM
+          mkdir /tmp/www
+          cd /tmp/www
+          mkdir html
+          cat >Dockerfile <<EOM
           FROM nginx
           COPY html /usr/share/nginx/html
           EOM
           host=$(hostname)
           id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json)
-          cat << EOM | sudo tee index.html
+          cat <<EOM >html/index.html
           <!DOCTYPE html>
           <html>
           <head>
@@ -64,16 +62,16 @@ topology_template:
           </div>
           </body></html>
           EOM
-          wget https://git.opnfv.org/models/plain/tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico -O ~/www/html/favicon.ico
+          wget -O /tmp/www/html/favicon.ico https://git.opnfv.org/models/plain/tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico
           sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
           curl -fsSL https://apt.dockerproject.org/gpg | sudo apt-key add -
           sudo apt-key update
-          echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" | sudo tee -a /etc/apt/sources.list.d/docker.list
-          sudo add-apt-repository "deb https://apt.dockerproject.org/repo/ ubuntu-$(lsb_release -cs) main"
+          echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" >~/dockerrepo
+          sudo tee -a /etc/apt/sources.list.d/docker.list ~/dockerrepo
+          sudo add-apt-repository "deb https://apt.dockerproject.org/repo/ ubuntu-xenial main"
           sudo apt-get update
           sudo apt-get install -y docker-engine
           sudo docker pull nginx
-          cd ~/www
           sudo docker build -t vhello .
           sudo docker run --name vHello -d -p 80:80 vhello
         config: |
@@ -103,10 +101,6 @@ topology_template:
 
     VDU2:
       type: tosca.nodes.nfv.VDU.Tacker
-      artifacts:
-        VNFImage:
-          type: tosca.artifacts.Deployment.Image.VM
-          file: http://cloud-images.ubuntu.com/releases/xenial/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img
       capabilities:
         nfv_compute:
           properties:
@@ -114,6 +108,7 @@ topology_template:
             mem_size: 1024 MB
             disk_size: 4 GB
       properties:
+        image: models-xenial-server
         availability_zone: nova
         mgmt_driver: noop
         config_drive: true
@@ -128,15 +123,16 @@ topology_template:
           <pubkey>
           EOM
           sudo mount /dev/sr0 /mnt/
-          mkdir ~/www
-          mkdir ~/www/html
-          cat > ~/www/Dockerfile <<EOM
+          mkdir /tmp/www
+          cd /tmp/www
+          mkdir html
+          cat >Dockerfile <<EOM
           FROM nginx
           COPY html /usr/share/nginx/html
           EOM
           host=$(hostname)
           id=$(cut -d ',' -f 3 /mnt/openstack/latest/meta_data.json)
-          cat << EOM | sudo tee index.html
+          cat <<EOM >html/index.html
           <!DOCTYPE html>
           <html>
           <head>
@@ -158,16 +154,16 @@ topology_template:
           </div>
           </body></html>
           EOM
-          wget https://git.opnfv.org/models/plain/tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico -O ~/www/html/favicon.ico
+          wget -O /tmp/www/html/favicon.ico https://git.opnfv.org/models/plain/tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico
           sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
           curl -fsSL https://apt.dockerproject.org/gpg | sudo apt-key add -
           sudo apt-key update
-          echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" | sudo tee -a /etc/apt/sources.list.d/docker.list
-          sudo add-apt-repository "deb https://apt.dockerproject.org/repo/ ubuntu-$(lsb_release -cs) main"
+          echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" >~/dockerrepo
+          sudo tee -a /etc/apt/sources.list.d/docker.list ~/dockerrepo
+          sudo add-apt-repository "deb https://apt.dockerproject.org/repo/ ubuntu-xenial main"
           sudo apt-get update
           sudo apt-get install -y docker-engine
           sudo docker pull nginx
-          cd ~/www
           sudo docker build -t vhello .
           sudo docker run --name vHello -d -p 80:80 vhello
         config: |
@@ -197,10 +193,6 @@ topology_template:
 
     VDU3:
       type: tosca.nodes.nfv.VDU.Tacker
-      artifacts:
-        VNFImage:
-          type: tosca.artifacts.Deployment.Image.VM
-          file: http://cloud-images.ubuntu.com/releases/xenial/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img
       capabilities:
         nfv_compute:
           properties:
@@ -208,6 +200,7 @@ topology_template:
             mem_size: 1024 MB
             disk_size: 4 GB
       properties:
+        image: models-xenial-server
         availability_zone: nova
         mgmt_driver: noop
         user_data_format: RAW
@@ -220,11 +213,18 @@ topology_template:
           cat << EOM >/home/ubuntu/.ssh/authorized_keys
           <pubkey>
           EOM
+          cat << EOF >/tmp/setup.sh
           echo "1" | sudo tee /proc/sys/net/ipv4/ip_forward
           sudo sysctl net.ipv4.ip_forward=1
-          sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state --state NEW -m statistic --mode nth --every 2 --packet 0 -j DNAT --to-destination <vdu1_ip>:80
-          sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state --state NEW -m statistic --mode nth --every 2 --packet 0 -j DNAT --to-destination <vdu2_ip>:80
+          sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state \\
+          --state NEW -m statistic --mode nth --every 2 --packet 0 \\
+          -j DNAT --to-destination <vdu1_ip>:80
+          sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -m state \\
+          --state NEW -m statistic --mode nth --every 2 --packet 0 \\
+          -j DNAT --to-destination <vdu2_ip>:80
           sudo iptables -t nat -A POSTROUTING -j MASQUERADE
+          EOF
+          bash /tmp/setup.sh
         config: |
           param0: key1
           param1: key2
