@@ -149,10 +149,6 @@ setup () {
   source /opt/tacker/admin-openrc.sh
   chmod 755 /opt/tacker/*.sh
 
-  echo "$0: $(date) Create image models-xenial-server"
-  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
-  if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --location http://cloud-images.ubuntu.com/releases/xenial/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img --container-format bare; fi
-
   echo "$0: $(date) tacker-setup part 1"
   bash utils/tacker-setup.sh init
   if [ $? -eq 1 ]; then fail; fi

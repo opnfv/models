@@ -168,6 +168,10 @@ function setup () {
   echo "$0: $(date) Setup admin-openrc.sh"
   source /opt/tacker/admin-openrc.sh
 
+  echo "$0: $(date) Create image models-xenial-server"
+  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
+  if [[ -z "$image_id" ]]; then glance --os-image-api-version 1 image-create --name models-xenial-server --disk-format qcow2 --location http://cloud-images.ubuntu.com/releases/xenial/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img --container-format bare; fi
+
   uid=$(openstack user list | awk "/ tacker / { print \$2 }")
   if [[ $uid ]]; then
     echo "$0: $(date) Remove prior Tacker user etc"
