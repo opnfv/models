@@ -417,7 +417,6 @@ function setup_test_environment () {
 function clean () {
   source /opt/tacker/admin-openrc.sh
   eid=($(openstack endpoint list | awk "/tacker/ { print \$2 }")); for id in ${eid[@]}; do openstack endpoint delete ${id}; done
-  openstack endpoint delete $(openstack endpoint list | awk "/tacker/ { print \$2 }")
   openstack user delete $(openstack user list | awk "/tacker/ { print \$2 }")
   openstack service delete $(openstack service list | awk "/tacker/ { print \$2 }")
   pid=($(neutron port-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${pid[@]}; do neutron port-delete ${id};  done
