@@ -20,23 +20,23 @@
 # Use Case Description: A single-node simple python web server, connected to
 # two internal networks (private and admin), and accessible via a floating IP.
 # Based upon the OpenStack Tacker project's "tosca-vnfd-hello-world" blueprint,
-# as extended for testing of more Tacker-supported features as of OpenStack 
+# as extended for testing of more Tacker-supported features as of OpenStack
 # Newton.
 #
-# Prerequisites: 
-# This test can be run in either an OPNFV environment, or a plain OpenStack
-# environment (e.g. Devstack). 
-# For Devstack running in a VM on the host, you must first enable the host to 
-#   access the VMs running under Devstack:
-#   1) In devstack VM: 
+# Prerequisites:
+# This test can be run in either an OPNFV environment or a plain OpenStack
+# environment (e.g. DevStack).
+# For Devstack running in a VM on the host, you must first enable the host to
+#   access the VMs running under DevStack:
+#   1) In Devstack VM:
 #      $ sudo iptables -t nat -A POSTROUTING -o ens3 -j MASQUERADE
 #      Sub the primary interface of your devstack VM for ens3, as needed.
-#   2) On the host (e.g linux): 
+#   2) On the host (e.g linux):
 #      $ sudo route add -net 172.24.0.0/16 gw 192.168.122.112
-#      Sub your devstack Public network subnet for 172.24.0.0/16, and 
-#      your devstack VM IP address on the host for 192.168.122.112
-#   Also you may need to ensure that nested virtualization is enabled, e.g. in 
-#   virt-manager, enable "Copy host CPU confguraton" for the devstack VM.
+#      Sub your devstack Public network subnet for 172.24.0.0/16, and
+#      your Devstack VM IP address on the host for 192.168.122.112
+#   Also you may need to ensure that nested virtualization is enabled, e.g. in
+#   virt-manager, enable "Copy host CPU confguraton" for the Devstack VM.
 #
 # For OPNFV-based tests, prerequisites are
 #   1) models-joid-001 | models-apex-001 (installation of OPNFV system)
@@ -60,8 +60,8 @@
 # 4) bash vHello_Tacker.sh clean
 #   TODO: add assertions
 #
-# Post-State: 
-# After step 1, Tacker is installed and active in a docker container, and the 
+# Post-State:
+# After step 1, Tacker is installed and active in a docker container, and the
 # test blueprint etc are prepared in a shared virtual folder /opt/tacker.
 # After step 2, the VNF is running and verified.
 # After step 3, the VNF is deleted and the system returned to step 1 post-state.
@@ -103,7 +103,7 @@ fail() {
 
 assert() {
   if [[ $2 == true ]]; then echo "$0 test assertion passed: $1"
-  else 
+  else
     echo "$0 test assertion failed: $1"
     fail
   fi
@@ -111,7 +111,7 @@ assert() {
 
 get_floating_net () {
   network_ids=($(neutron net-list|grep -v "+"|grep -v name|awk '{print $2}'))
-  for id in ${network_ids[@]}; do
+  for id in "${network_ids[@]}"; do
       [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && FLOATING_NETWORK_ID=${id}
   done
   if [[ $FLOATING_NETWORK_ID ]]; then
@@ -125,7 +125,7 @@ get_floating_net () {
 try () {
   count=$1
   $3
-  while [[ $? == 1 && $count > 0 ]]; do 
+  while [[ $? == 1 && $count -gt 0 ]]; do
     sleep $2
     let count=$count-1
     $3
@@ -137,7 +137,7 @@ setup () {
   trap 'fail' ERR
 
   echo "$0: $(date) Setup shared test folder /opt/tacker"
-  if [ -d /opt/tacker ]; then sudo rm -rf /opt/tacker; fi 
+  if [ -d /opt/tacker ]; then sudo rm -rf /opt/tacker; fi
   sudo mkdir -p /opt/tacker
   sudo chown $USER /opt/tacker
   chmod 777 /opt/tacker/
@@ -160,14 +160,9 @@ setup () {
   # For devstack, set in local.conf per http://docs.openstack.org/developer/devstack/guides/neutron.html
   # Q_ML2_PLUGIN_EXT_DRIVERS=port_security
 
+
   dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
   if [ "$dist" == "Ubuntu" ]; then
-    dpkg -l juju
-    if [[ $? -eq 0 ]]; then
-      echo "$0: $(date) JOID workaround for Colorado - enable ML2 port security"
-      juju set neutron-api enable-ml2-port-security=true
-    fi
-
     echo "$0: $(date) Execute tacker-setup.sh in the container"
     sudo docker exec -it tacker /bin/bash /opt/tacker/tacker-setup.sh setup $2
     if [ $? -eq 1 ]; then fail; fi
@@ -177,7 +172,7 @@ setup () {
     if [ $? -eq 1 ]; then fail; fi
   fi
 
-  assert "models-tacker-001 (Tacker installation in a docker container on the jumphost)" true 
+  assert "models-tacker-001 (Tacker installation in a docker container on the jumphost)" true
 }
 
 copy_blueprint() {
@@ -206,7 +201,7 @@ start() {
   ssh-keygen -t rsa -N "" -f /opt/tacker/vHello -C ubuntu@vHello
   chmod 600 /opt/tacker/vHello
   openstack keypair create --public-key /opt/tacker/vHello.pub vHello
-  assert "models-nova-001 (Keypair creation)" true 
+  assert "models-nova-001 (Keypair creation)" true
 
   echo "$0: $(date) Inject public key into blueprint"
   pubkey=$(cat /opt/tacker/vHello.pub)
@@ -219,7 +214,7 @@ start() {
   cd /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker
   # newton: NAME (was "--name") is now a positional parameter
   tacker vnfd-create --vnfd-file blueprint.yaml hello-world-tacker
-  if [[ $? -eq 0 ]]; then 
+  if [[ $? -eq 0 ]]; then
     assert "models-tacker-002 (VNFD creation)" true
   else
     assert "models-tacker-002 (VNFD creation)" false
@@ -237,7 +232,7 @@ start() {
   while [[ -z $active && $count -gt 0 ]]
   do
     active=$(tacker vnf-show hello-world-tacker | grep ACTIVE)
-    if [[ $(tacker vnf-show hello-world-tacker | grep -c ERROR) > 0 ]]; then 
+    if [[ $(tacker vnf-show hello-world-tacker | grep -c ERROR) -gt 0 ]]; then
       echo "$0: $(date) hello-world-tacker VNF creation failed with state ERROR"
       assert "models-tacker-002 (VNF creation)" false
     fi
@@ -245,11 +240,11 @@ start() {
     sleep 30
     echo "$0: $(date) wait for hello-world-tacker to go ACTIVE"
   done
-  if [[ $count == 0 ]]; then 
+  if [[ $count == 0 ]]; then
     echo "$0: $(date) hello-world-tacker VNF creation failed - timed out"
     assert "models-tacker-002 (VNF creation)" false
   fi
-  assert "models-tacker-002 (VNF creation)" true 
+  assert "models-tacker-002 (VNF creation)" true
 
   # Setup for workarounds
   echo "$0: $(date) directly set port security on ports (unsupported in Mitaka Tacker)"
@@ -258,7 +253,7 @@ start() {
   #  SERVER_ID=$(openstack stack resource list $HEAT_ID | awk "/VDU1 / { print \$4 }")
   SERVER_ID=$(openstack server list | awk "/VDU1/ { print \$2 }")
   id=($(neutron port-list|grep -v "+"|grep -v name|awk '{print $2}'))
-  for id in ${id[@]}; do
+  for id in "${id[@]}"; do
     if [[ $(neutron port-show $id|grep $SERVER_ID) ]]; then neutron port-update ${id} --port-security-enabled=True; fi
   done
 
@@ -286,8 +281,8 @@ start() {
   echo "$0: $(date) verify vHello server is running"
   apt-get install -y curl
   count=12
-  while [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]] 
-  do 
+  while [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]]
+  do
     sleep 10
     let count=$count-1
   done
@@ -317,11 +312,11 @@ stop() {
     try 12 10 "tacker vnf-delete hello-world-tacker"
     # It can take some time to delete a VNF - thus wait 2 minutes
     count=12
-    while [[ $count > 0 && "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')" != '' ]]; do 
+    while [[ $count -gt 0 && "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')" != '' ]]; do
       echo "$0: $(date) waiting for hello-world-tacker VNF delete to complete"
       sleep 10
       let count=$count-1
-    done 
+    done
     if [[ "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')" == '' ]]; then
       assert "models-tacker-004 (VNF deletion)" true
     else
@@ -349,10 +344,10 @@ stop() {
 #  fi
 
   # Cleanup for workarounds
-  fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${fip[@]}; do neutron floatingip-delete ${id};  done
+  fip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in "${fip[@]}"; do neutron floatingip-delete ${id};  done
   sg=($(openstack security group list|grep vHello|awk '{print $2}'))
-  for id in ${sg[@]}; do try 5 5 "openstack security group delete ${id}";  done
-  kid=($(openstack keypair list|grep vHello|awk '{print $2}')); for id in ${kid[@]}; do openstack keypair delete ${id};  done
+  for id in "${sg[@]}"; do try 5 5 "openstack security group delete ${id}";  done
+  kid=($(openstack keypair list|grep vHello|awk '{print $2}')); for id in "${kid[@]}"; do openstack keypair delete ${id};  done
 }
 
 forward_to_container () {
