@@ -163,12 +163,6 @@ setup () {
 
   dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
   if [ "$dist" == "Ubuntu" ]; then
-    dpkg -l juju
-    if [[ $? -eq 0 ]]; then
-      echo "$0: $(date) JOID workaround for Colorado - enable ML2 port security"
-      juju set neutron-api enable-ml2-port-security=true
-    fi
-
     echo "$0: $(date) Execute tacker-setup.sh in the container"
     sudo docker exec -it tacker /bin/bash /opt/tacker/tacker-setup.sh setup $2
     if [ $? -eq 1 ]; then fail; fi
