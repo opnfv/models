@@ -309,7 +309,7 @@ start() {
   echo "$0: $(date) get web server internal and LB addresses"
   vdu_url[1]="http://${vdu_ip[1]}"
   vdu_url[2]="http://${vdu_ip[2]}"
-  vdu_url[3]="http://${vdu_ip[2]}"
+  vdu_url[3]="http://${vdu_ip[3]}"
 
   apt-get install -y curl
 
