@@ -162,6 +162,7 @@ function setup () {
   echo "$0: $(date) Install OpenStack clients"
   install_client python-openstackclient $branch
   install_client python-neutronclient $branch
+  install_client python-novaclient $branch
 
 #  pip install --upgrade python-openstackclient python-glanceclient python-neutronclient keystonemiddleware
 
