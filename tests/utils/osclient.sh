@@ -164,6 +164,9 @@ function setup () {
   echo "$0: $(date) Setup shell environment variables"
   echo "source $openrc" >>~/.bashrc
   source ~/.bashrc
+  
+  echo "$0: $(date) Install nano"
+  apt-get install nano
 }
 
 start=`date +%s`
