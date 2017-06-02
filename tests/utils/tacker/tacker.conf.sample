@@ -220,11 +220,11 @@
 #
 
 # Number of attempts to retry for stack creation/deletion (integer value)
-#stack_retries = 60
+stack_retries = 60
 
 # Wait time (in seconds) between consecutive stack create/delete retries
 # (integer value)
-#stack_retry_wait = 5
+stack_retry_wait = 10
 
 # Flavor Extra Specs (dict value)
 #flavor_extra_specs =
