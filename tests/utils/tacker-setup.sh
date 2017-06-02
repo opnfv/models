@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# What this is: Setup script for the OpenStack Tacker VNF Manager starting from 
-# an Unbuntu Xenial docker container, on either an Ubuntu Xenial or Centos 7 
+# What this is: Setup script for the OpenStack Tacker VNF Manager starting from
+# an Unbuntu Xenial docker container, on either an Ubuntu Xenial or Centos 7
 # host. This script is intended to be used in an OPNFV environment, or a plain
 # OpenStack environment (e.g. Devstack).
 # This install procedure is intended to deploy Tacker for testing purposes only.
@@ -60,10 +60,10 @@ function setenv () {
 
 function get_external_net () {
   network_ids=($(neutron net-list|grep -v "+"|grep -v name|awk '{print $2}'))
-  for id in ${network_ids[@]}; do
+  for id in "${network_ids[@]}"; do
       [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && ext_net_id=${id}
   done
-  if [[ $ext_net_id ]]; then 
+  if [[ $ext_net_id ]]; then
     EXTERNAL_NETWORK_NAME=$(neutron net-show $ext_net_id | awk "/ name / { print \$4 }")
     EXTERNAL_SUBNET_ID=$(neutron net-show $EXTERNAL_NETWORK_NAME | awk "/ subnets / { print \$4 }")
   else
@@ -94,16 +94,16 @@ function create_container () {
     sudo docker pull ubuntu:xenial
     sudo service docker start
     sudo docker run -it -d -v /opt/tacker/:/opt/tacker --name tacker ubuntu:xenial /bin/bash
-  else 
+  else
     # Centos
     echo "Centos-based install"
     sudo tee /etc/yum.repos.d/docker.repo <<-'EOF'
 [dockerrepo]
-name=Docker Repository--parents 
+name=Docker Repository--parents
 baseurl=https://yum.dockerproject.org/repo/main/centos/7/
 enabled=1
 gpgcheck=1
-gpgkey=https://yum.dockerproject.org/gpg 
+gpgkey=https://yum.dockerproject.org/gpg
 EOF
     sudo yum install -y docker-engine
     # xenial is needed for python 3.5
@@ -149,7 +149,7 @@ function setup () {
   debconf-set-selections <<< 'mysql-server mysql-server/root_password password '$MYSQL_PASSWORD
   debconf-set-selections <<< 'mysql-server mysql-server/root_password_again password '$MYSQL_PASSWORD
   apt-get -q -y install mysql-server python-mysqldb
-  service mysql restart 
+  service mysql restart
 
   cd /opt/tacker
 
@@ -221,9 +221,9 @@ function setup () {
   mkdir /usr/local/etc/tacker
   cp /opt/tacker/tacker.conf.sample /usr/local/etc/tacker/tacker.conf
 
-  # [DEFAULT] section (update)    
+  # [DEFAULT] section (update)
   sed -i -- 's/#auth_strategy = keystone/auth_strategy = keystone/' /usr/local/etc/tacker/tacker.conf
-  # [DEFAULT] section (add to)    
+  # [DEFAULT] section (add to)
   sed -i -- "/\[DEFAULT\]/adebug = True" /usr/local/etc/tacker/tacker.conf
   sed -i -- "/\[DEFAULT\]/ause_syslog = False" /usr/local/etc/tacker/tacker.conf
   sed -i -- "/\[DEFAULT\]/alogging_context_format_string = %(asctime)s.%(msecs)03d %(levelname)s %(name)s [%(request_id)s %(user_name)s %(project_name)s] %(instance)s%(message)s" /usr/local/etc/tacker/tacker.conf
@@ -263,9 +263,9 @@ function setup () {
   # [nfvo_vim] section
   sed -i -- "s/#default_vim = <None>/default_vim = VIM0/" /usr/local/etc/tacker/tacker.conf
 
-  # [openstack_vim] section
-  sed -i -- "s/#stack_retries = 60/stack_retries = 10/" /usr/local/etc/tacker/tacker.conf
-  sed -i -- "s/#stack_retry_wait = 5/stack_retry_wait = 60/" /usr/local/etc/tacker/tacker.conf
+  # [openstack_vim] section - only change this if you want to override values in models/tests/utils/tacker/tacker.conf.sample
+  #sed -i -- "s/#stack_retries = 60/stack_retries = 10/" /usr/local/etc/tacker/tacker.conf
+  #sed -i -- "s/#stack_retry_wait = 5/stack_retry_wait = 60/" /usr/local/etc/tacker/tacker.conf
 
   # newton: add [keystone_authtoken] missing in generated tacker.conf.sample, excluding the following
   # (not referenced) memcached_servers = 15.184.66.78:11211
@@ -304,7 +304,7 @@ EOF
 [database]
 connection = mysql://tacker:$MYSQL_PASSWORD@localhost:3306/tacker?charset=utf8
 EOF
- 
+
   # newton: add [tacker_nova] missing in generated tacker.conf.sample, excluding the following
     # these diffs seem superfluous - the only ref'd field is region_name:
     # project_domain_id = default
@@ -355,7 +355,7 @@ EOF
     # project_domain_name: Default
     # user_domain_name: Default
   keystone_ipport=$(openstack endpoint show keystone | awk "/ internalurl / { print \$4 }" | awk -F'[/]' '{print $3}')
-  cat <<EOF >vim-config.yaml 
+  cat <<EOF >vim-config.yaml
 auth_url: $OS_AUTH_URL
 username: $OS_USERNAME
 password: $OS_PASSWORD
@@ -376,7 +376,7 @@ function setup_test_environment () {
   if [ $(neutron net-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
     echo "$0: $(date) vnf_mgmt network exists"
   else
-    neutron net-create vnf_mgmt		
+    neutron net-create vnf_mgmt
     echo "$0: $(date) Create management subnet"
     neutron subnet-create vnf_mgmt 192.168.200.0/24 --name vnf_mgmt --gateway 192.168.200.1 --enable-dhcp --allocation-pool start=192.168.200.2,end=192.168.200.254 --dns-nameserver 8.8.8.8
   fi
@@ -397,7 +397,7 @@ function setup_test_environment () {
   if [ $(neutron net-list | awk "/ vnf_private / { print \$2 }") ]; then
     echo "$0: $(date) vnf_private network exists"
   else
-    neutron net-create vnf_private		
+    neutron net-create vnf_private
     echo "$0: $(date) Create private subnet"
     neutron subnet-create vnf_private 192.168.201.0/24 --name vnf_private --gateway 192.168.201.1 --enable-dhcp --allocation-pool start=192.168.201.2,end=192.168.201.254 --dns-nameserver 8.8.8.8
   fi
@@ -417,18 +417,18 @@ function setup_test_environment () {
 
 function clean () {
   source /opt/tacker/admin-openrc.sh
-  eid=($(openstack endpoint list | awk "/tacker/ { print \$2 }")); for id in ${eid[@]}; do openstack endpoint delete ${id}; done
+  eid=($(openstack endpoint list | awk "/tacker/ { print \$2 }")); for id in "${eid[@]}"; do openstack endpoint delete ${id}; done
   openstack user delete $(openstack user list | awk "/tacker/ { print \$2 }")
   openstack service delete $(openstack service list | awk "/tacker/ { print \$2 }")
-  pid=($(neutron port-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${pid[@]}; do neutron port-delete ${id};  done
-  sid=($(openstack stack list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${sid[@]}; do openstack stack delete ${id};  done
-  sid=($(openstack security group list|grep security_group_local_security_group|awk '{print $2}')); for id in ${sid[@]}; do openstack security group delete ${id};  done
+  pid=($(neutron port-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in "${pid[@]}"; do neutron port-delete ${id};  done
+  sid=($(openstack stack list|grep -v "+"|grep -v id|awk '{print $2}')); for id in "${sid[@]}"; do openstack stack delete ${id};  done
+  sid=($(openstack security group list|grep security_group_local_security_group|awk '{print $2}')); for id in "${sid[@]}"; do openstack security group delete ${id};  done
   neutron router-gateway-clear vnf_mgmt_router
-  pid=($(neutron router-port-list vnf_mgmt_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_mgmt_router vnf_mgmt;  done
+  pid=($(neutron router-port-list vnf_mgmt_router|grep -v name|awk '{print $2}')); for id in "${pid[@]}"; do neutron router-interface-delete vnf_mgmt_router vnf_mgmt;  done
   neutron router-delete vnf_mgmt_router
   neutron net-delete vnf_mgmt
   neutron router-gateway-clear vnf_private_router
-  pid=($(neutron router-port-list vnf_private_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_private_router vnf_private;  done
+  pid=($(neutron router-port-list vnf_private_router|grep -v name|awk '{print $2}')); for id in "${pid[@]}"; do neutron router-interface-delete vnf_private_router vnf_private;  done
   neutron router-delete vnf_private_router
   neutron net-delete vnf_private
   pass
