@@ -51,7 +51,7 @@ function setenv () {
   echo "$0: $(date) Setup shared virtual folders and save this script there"
   mkdir /opt/tacker
   cp $0 /opt/tacker/.
-  cp `dirname $0`/tacker/tacker.conf.sample /opt/tacker/.
+  cp `dirname $0`/tacker.conf.sample /opt/tacker/.
   chmod 755 /opt/tacker/*.sh
 
   echo "$0: $(date) Setup admin-openrc.sh"
