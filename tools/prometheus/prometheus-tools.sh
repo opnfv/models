@@ -1,12 +1,12 @@
 #!/bin/bash
 # Copyright 2017 AT&T Intellectual Property, Inc
-#  
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#  
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,9 +14,9 @@
 # limitations under the License.
 #
 #. What this is: Functions for testing with Prometheus and Grafana. Sets up
-#.   Prometheus and Grafana on a master node (e.g. for kubernetes, docker, 
+#.   Prometheus and Grafana on a master node (e.g. for kubernetes, docker,
 #.   rancher, openstack) and agent nodes (where applications run).
-#. Prerequisites: 
+#. Prerequisites:
 #. - Ubuntu server for master and agent nodes
 #. - Docker installed
 #. Usage:
@@ -57,7 +57,7 @@ function setup_prometheus() {
   if [[ -d ~/prometheus ]]; then rm -rf ~/prometheus; fi
   mkdir ~/prometheus
   mkdir ~/prometheus/dashboards
-  cp -r dashboards/* ~/prometheus/dashboards
+  cp -r ~/models/tools/prometheus/dashboards/* ~/prometheus/dashboards
   cd  ~/prometheus
   wget https://github.com/prometheus/prometheus/releases/download/v2.0.0-beta.2/prometheus-2.0.0-beta.2.linux-amd64.tar.gz
   tar xvfz prometheus-*.tar.gz
@@ -156,7 +156,7 @@ EOF
     -H "Content-type: application/json" \
     -d @datasources.json http://admin:admin@$grafana_ip:3000/api/datasources
 
-  if [[ "$(jq -r '.message' /tmp/json)" != "Datasource added" ]]; then 
+  if [[ "$(jq -r '.message' /tmp/json)" != "Datasource added" ]]; then
     fail "Datasource creation failed"
   fi
   echo "${FUNCNAME[0]}: Prometheus datasource for Grafana added"

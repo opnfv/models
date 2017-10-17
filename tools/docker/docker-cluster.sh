@@ -1,20 +1,20 @@
 #!/bin/bash
 # Copyright 2017 AT&T Intellectual Property, Inc
-#  
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#  
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#. What this is: Deployment script for a mult-node docker-ce cluster. 
-#. Prerequisites: 
+#. What this is: Deployment script for a mult-node docker-ce cluster.
+#. Prerequisites:
 #. - Ubuntu server for master and worker nodes
 #. Usage:
 #. $ git clone https://gerrit.opnfv.org/gerrit/models  ~/models
@@ -28,12 +28,12 @@
 #. $ bash docker_cluster.sh setup <master> "<workers>"
 #.   Installs and starts master and worker nodes.
 #. $ bash docker_cluster.sh create <service>
-#.   <service>: Demo service name to start. 
+#.   <service>: Demo service name to start.
 #.     Currently supported: nginx
 #. $ bash docker_cluster.sh delete <service>
 #.   <service>: Service name to delete.
 #. $ bash docker_cluster.sh clean [<node>]
-#.   <node>: optional IP address of node to clean. 
+#.   <node>: optional IP address of node to clean.
 #.   By default, cleans the entire cluster.
 #.
 
@@ -113,7 +113,7 @@ function create_service() {
       ;;
     *)
       echo "${FUNCNAME[0]}: service $1 not setup for use with this script"
-  esac    
+  esac
 
   if ! curl -X POST http://$master:4243/services/create -d @$1.json ; then
     echo "${FUNCNAME[0]}: service creation failed"
@@ -142,8 +142,8 @@ function check_service() {
           echo "${FUNCNAME[0]}: service is not yet active, waiting 10 seconds"
           sleep 10
         done
-        curl -s -o /tmp/resp http://$node:$port 
-        if [[ $(grep -c "$match" /tmp/resp) == 0 ]]; then 
+        curl -s -o /tmp/resp http://$node:$port
+        if [[ $(grep -c "$match" /tmp/resp) == 0 ]]; then
           not="NOT"
         fi
         echo "$service service is $not active at address http://$node:$port"
