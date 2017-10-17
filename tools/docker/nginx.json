@@ -1,0 +1,67 @@
+{
+  "Name": "nginx",
+  "TaskTemplate": {
+    "ContainerSpec": {
+      "Image": "nginx",
+      "Mounts": [
+        {
+          "ReadOnly": true,
+          "Source": "web-data",
+          "Target": "/usr/share/nginx/html",
+          "Type": "volume",
+          "VolumeOptions": {
+            "DriverConfig": { },
+            "Labels": { "com.example.something": "something-value" }
+            }
+          }
+        ],
+      "DNSConfig": {
+        "Nameservers": [ "8.8.8.8" ],
+        "Search": [ "example.org" ],
+        "Options": [ "timeout:3" ]
+        }
+      },
+    "LogDriver": {
+      "Name": "json-file",
+      "Options": {
+        "max-file": "3",
+        "max-size": "10M"
+        }
+      },
+    "Placement": { },
+    "Resources": {
+      "Limits": {
+        "MemoryBytes": 104857600
+        },
+      "Reservations": { }
+      },
+    "RestartPolicy": {
+      "Condition": "on-failure",
+      "Delay": 10000000000,
+      "MaxAttempts": 10
+      }
+    },
+  "Mode": {
+    "Replicated": {
+      "Replicas": 3
+      }
+    },
+  "UpdateConfig": {
+    "Delay": 30000000000,
+    "Parallelism": 2,
+    "FailureAction": "pause"
+    },
+  "EndpointSpec": {
+    "Ports": [
+      {
+        "Protocol": "tcp",
+        "PublishedPort": 8080,
+        "TargetPort": 80
+        }
+      ]
+    },
+  "Labels": {
+    "foo": "bar"
+    }
+}
+
