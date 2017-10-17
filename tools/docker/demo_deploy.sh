@@ -1,12 +1,12 @@
 #!/bin/bash
 # Copyright 2017 AT&T Intellectual Property, Inc
-#  
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#  
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,7 +20,7 @@
 #. - prometheus + grafana for cluster monitoring/stats
 #.   Prometheus dashboard: http://<master_public_ip>:9090
 #.   Grafana dashboard: http://<master_public_ip>:3000
-#. 
+#.
 #. Prerequisites:
 #. - Ubuntu server for cluster nodes (admin/master and worker nodes)
 #. - MAAS server as cluster admin for Rancher master/worker nodes
@@ -47,7 +47,7 @@ ssh-add $key
 echo "Setting up Docker..."
 bash ~/models/tools/docker/docker-cluster.sh all $master "$workers"
 # TODO: Figure this out... Have to break the setup into two steps as something
-# causes the ssh session to end before the prometheus setup, if both scripts 
+# causes the ssh session to end before the prometheus setup, if both scripts
 # (k8s-cluster and prometheus-tools) are in the same ssh session
 echo "Setting up Prometheus..."
 scp -o StrictHostKeyChecking=no $key ubuntu@$master:/home/ubuntu/$key

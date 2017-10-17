@@ -1,12 +1,12 @@
 #!/bin/bash
 # Copyright 2017 AT&T Intellectual Property, Inc
-#  
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#  
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,14 +22,14 @@
 #.  will be setup with:
 #. Prometheus dashboard: http://<admin_public_ip>:9090
 #. Grafana dashboard: http://<admin_public_ip>:3000
-#. 
+#.
 #. Prerequisites:
 #. - Ubuntu server for kubernetes cluster nodes (admin/master and agent nodes)
 #. - MAAS server as cluster admin for kubernetes master/agent nodes
 #. - Password-less ssh key provided for node setup
 #. Usage: on the MAAS server
 #. $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
-#. $ bash ~/models/tools/kubernetes/demo_deploy.sh <key> "<hosts>" <admin ip> 
+#. $ bash ~/models/tools/kubernetes/demo_deploy.sh <key> "<hosts>" <admin ip>
 #.     "<agent ips>" <pub-net> <priv-net> [<extras>]
 #. <key>: name of private key for cluster node ssh (in current folder)
 #. <hosts>: space separated list of hostnames managed by MAAS
@@ -58,7 +58,7 @@ git clone https://gerrit.opnfv.org/gerrit/models
 bash models/tools/kubernetes/k8s-cluster.sh all "$agent_ips" $priv_net $pub_net
 EOF
 # TODO: Figure this out... Have to break the setup into two steps as something
-# causes the ssh session to end before the prometheus setup, if both scripts 
+# causes the ssh session to end before the prometheus setup, if both scripts
 # (k8s-cluster and prometheus-tools) are in the same ssh session
 echo "Setting up prometheus..."
 ssh -x ubuntu@$admin_ip <<EOF
@@ -67,7 +67,7 @@ ssh-add $key
 bash models/tools/prometheus/prometheus-tools.sh all "$agent_ips"
 EOF
 echo "Setting up cloudify..."
-scp models/tools/cloudify/k8s-cloudify.sh ubuntu@$admin_ip:/home/ubuntu/. 
+scp models/tools/cloudify/k8s-cloudify.sh ubuntu@$admin_ip:/home/ubuntu/.
 ssh -x ubuntu@$admin_ip bash k8s-cloudify.sh prereqs
 ssh -x ubuntu@$admin_ip bash k8s-cloudify.sh setup
 ssh -x ubuntu@$admin_ip bash k8s-cloudify.sh demo
