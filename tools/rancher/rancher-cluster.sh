@@ -518,8 +518,8 @@ case "$1" in
   all)
     setup "$2"
     demo "$2"
-    check_service nginx/lb
-    check_service dokuwiki/lb
+    check_service nginx/lb http "Welcome to nginx!"
+    check_service dokuwiki/lb http "This topic does not exist yet"
 # Grafana is setup via prometheus-toold.sh for now
 #    check_service grafana/grafana
     ;;
