@@ -1,12 +1,12 @@
 #!/bin/bash
 # Copyright 2017 AT&T Intellectual Property, Inc
-#  
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#  
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,7 +20,7 @@
 #. - prometheus + grafana for cluster monitoring/stats
 #.   Prometheus dashboard: http://<master_public_ip>:9090
 #.   Grafana dashboard: http://<master_public_ip>:3000
-#. 
+#.
 #. Prerequisites:
 #. - Ubuntu server for Rancher cluster nodes (admin/master and agent nodes)
 #. - MAAS server as cluster admin for Rancher master/agent nodes
@@ -47,17 +47,17 @@ ssh-add $key
 if [[ "x$extras" != "x" ]]; then source $extras; fi
 scp -o StrictHostKeyChecking=no $key ubuntu@$admin_ip:/home/ubuntu/$key
 echo "Setting up Rancher..."
-ssh -x ubuntu@$admin_ip <<EOF
+ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip <<EOF
 exec ssh-agent bash
 ssh-add $key
 git clone https://gerrit.opnfv.org/gerrit/models
 bash models/tools/rancher/rancher-cluster.sh all "$agent_ips"
 EOF
 # TODO: Figure this out... Have to break the setup into two steps as something
-# causes the ssh session to end before the prometheus setup, if both scripts 
+# causes the ssh session to end before the prometheus setup, if both scripts
 # (k8s-cluster and prometheus-tools) are in the same ssh session
 echo "Setting up Prometheus..."
-ssh -x ubuntu@$admin_ip <<EOF
+ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip <<EOF
 exec ssh-agent bash
 ssh-add $key
 bash models/tools/prometheus/prometheus-tools.sh all "$agent_ips"

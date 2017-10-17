@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# What this is: semi-random request generator for a web service 
+# What this is: semi-random request generator for a web service
 #.
 #. How to use:
-#. $ git clone https://gerrit.opnfv.org/gerrit/models 
+#. $ git clone https://gerrit.opnfv.org/gerrit/models
 #  $ bash models/tools/traffic <url>
 #   <url>: address of the web service
 

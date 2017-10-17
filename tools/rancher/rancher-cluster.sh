@@ -1,20 +1,20 @@
 #!/bin/bash
 # Copyright 2017 AT&T Intellectual Property, Inc
-#  
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#  
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#. What this is: Functions for testing with rancher. 
-#. Prerequisites: 
+#. What this is: Functions for testing with rancher.
+#. Prerequisites:
 #. - Ubuntu server for master and agent nodes
 #. Usage:
 #. $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
@@ -36,7 +36,7 @@
 #.   Removes Rancher and installed blueprints from the master and agent nodes.
 #.
 #. To call the procedures, directly, e.g. public_endpoint nginx/lb
-#. $ source rancher-cluster.sh 
+#. $ source rancher-cluster.sh
 #. See below for function-specific usage
 #.
 
@@ -82,9 +82,9 @@ function setup_master() {
   done
   echo "${FUNCNAME[0]}: rancher server is up after $delay seconds"
 
-  rm -rf ~/rancher 
-  mkdir ~/rancher 
-}     
+  rm -rf ~/rancher
+  mkdir ~/rancher
+}
 
 # Install rancher CLI tools
 # Usage example: install_cli_tools 172.16.0.2
@@ -121,15 +121,15 @@ $RANCHER_URL
 $RANCHER_ACCESS_KEY
 $RANCHER_SECRET_KEY
 EOF
-  
-  master=$(rancher config --print | jq -r '.url' | cut -d '/' -f 3) 
+
+  master=$(rancher config --print | jq -r '.url' | cut -d '/' -f 3)
   echo "${FUNCNAME[0]}: Create registration token"
   # added sleep to allow server time to be ready to create registration tokens (otherwise error is returned)
   sleep 5
-  curl -s -o /tmp/token -X POST -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"name":"master"}' http://$master/v1/registrationtokens 
+  curl -s -o /tmp/token -X POST -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"name":"master"}' http://$master/v1/registrationtokens
   while [[ $(jq -r ".type" /tmp/token) != "registrationToken" ]]; do
     sleep 5
-    curl -s -o /tmp/token -X POST -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"name":"master"}' http://$master/v1/registrationtokens 
+    curl -s -o /tmp/token -X POST -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"name":"master"}' http://$master/v1/registrationtokens
   done
   id=$(jq -r ".id" /tmp/token)
   echo "${FUNCNAME[0]}: registration token id=$id"
@@ -179,14 +179,14 @@ function setup_agent() {
     let delay=$delay+10
     state=$(rancher inspect $id | jq -r '.state')
   done
-  echo "${FUNCNAME[0]}: agent $2 state is $state after $delay seconds"  
+  echo "${FUNCNAME[0]}: agent $2 state is $state after $delay seconds"
 }
 
 # Delete an agent host
 # Usage example: delete_host 172.16.0.7
 function stop_agent() {
   echo "${FUNCNAME[0]}: deleting host $1"
-  rancher rm --stop $(rancher hosts | awk "/$1/{print \$1}") 
+  rancher rm --stop $(rancher hosts | awk "/$1/{print \$1}")
 }
 
 # Test service at access points
@@ -240,7 +240,7 @@ function start_simple_service() {
   # is the external port)
   ports=$3
   scale=$4
- 
+
   echo "${FUNCNAME[0]}: creating service folder ~/rancher/$service"
   mkdir ~/rancher/$service
   cd  ~/rancher/$service
@@ -282,7 +282,7 @@ function lb_service() {
   service=$1
   lbport=$2
   port=$3
- 
+
   cd  ~/rancher/$service
   echo "${FUNCNAME[0]}: creating docker-compose-lb.yml"
   # Define lb service via docker-compose.yml
@@ -371,7 +371,7 @@ function start_stack() {
 function delete_stack() {
   id=$(rancher stacks | grep "$1" | awk "{print \$1}")
   echo "${FUNCNAME[0]}: deleting stack $1 with id $id"
-  rancher rm --stop $id 
+  rancher rm --stop $id
 }
 
 # Delete a service
@@ -379,7 +379,7 @@ function delete_stack() {
 function delete_service() {
   id=$(rancher ps | grep "$1" | awk "{print \$1}")
   echo "${FUNCNAME[0]}: deleting service $1 with id $id"
-  rancher rm --stop $id 
+  rancher rm --stop $id
 }
 
 # Start a complex service, i.e. with yaml file customizations
@@ -391,7 +391,7 @@ function start_complex_service() {
   # is the external port)
   ports=$2
   scale=$3
- 
+
   echo "${FUNCNAME[0]}: creating service folder ~/rancher/$service"
   mkdir ~/rancher/$service
   cd  ~/rancher/$service
@@ -410,7 +410,7 @@ grafana:
         GF_SECURITY_SECRET_KEY: $(uuidgen)
 EOF
     ;;
-         
+
     *)
   esac
 
@@ -441,15 +441,16 @@ function demo() {
   lb_service dokuwiki 8002 80
   check_service dokuwiki/lb http "This topic does not exist yet"
   # Grafana server, accessible on one machine at port 3000
-  start_complex_service grafana 3000:3000 1
-  id=$(rancher ps | grep " grafana/grafana " | awk "{print \$1}")
-  source ~/models/tools/prometheus/prometheus-tools.sh setup "$agents"
-  grafana_ip=$(rancher inspect $id | jq -r ".publicEndpoints[0].ipAddress")
-  prometheus_ip=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
-  connect_grafana $prometheus_ip $grafana_ip
+  # Grafana is setup via prometheus-toold.sh for now
+#  start_complex_service grafana 3000:3000 1
+#  id=$(rancher ps | grep " grafana/grafana " | awk "{print \$1}")
+#  source ~/models/tools/prometheus/prometheus-tools.sh setup "$agents"
+#  grafana_ip=$(rancher inspect $id | jq -r ".publicEndpoints[0].ipAddress")
+#  prometheus_ip=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
+#  connect_grafana $prometheus_ip $grafana_ip
   public_endpoint nginx/lb
   public_endpoint dokuwiki/lb
-  public_endpoint grafana/grafana
+#  public_endpoint grafana/grafana
 
   end=`date +%s`
   runtime=$((end-start))
@@ -519,7 +520,8 @@ case "$1" in
     demo "$2"
     check_service nginx/lb
     check_service dokuwiki/lb
-    check_service grafana/grafana
+# Grafana is setup via prometheus-toold.sh for now
+#    check_service grafana/grafana
     ;;
   clean)
     clean "$2"

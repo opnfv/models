@@ -1,12 +1,12 @@
 #!/bin/bash
 # Copyright 2017 AT&T Intellectual Property, Inc
-#  
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#  
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,9 +14,9 @@
 # limitations under the License.
 #
 #. What this is: Functions for testing with Prometheus and Grafana. Sets up
-#.   Prometheus and Grafana on a master node (e.g. for kubernetes, docker, 
+#.   Prometheus and Grafana on a master node (e.g. for kubernetes, docker,
 #.   rancher, openstack) and agent nodes (where applications run).
-#. Prerequisites: 
+#. Prerequisites:
 #. - Ubuntu server for master and agent nodes
 #. - Docker installed
 #. Usage:
@@ -56,8 +56,6 @@ function setup_prometheus() {
   echo "${FUNCNAME[0]}: Setting up prometheus master"
   if [[ -d ~/prometheus ]]; then rm -rf ~/prometheus; fi
   mkdir ~/prometheus
-  mkdir ~/prometheus/dashboards
-  cp -r dashboards/* ~/prometheus/dashboards
   cd  ~/prometheus
   wget https://github.com/prometheus/prometheus/releases/download/v2.0.0-beta.2/prometheus-2.0.0-beta.2.linux-amd64.tar.gz
   tar xvfz prometheus-*.tar.gz
@@ -156,7 +154,7 @@ EOF
     -H "Content-type: application/json" \
     -d @datasources.json http://admin:admin@$grafana_ip:3000/api/datasources
 
-  if [[ "$(jq -r '.message' /tmp/json)" != "Datasource added" ]]; then 
+  if [[ "$(jq -r '.message' /tmp/json)" != "Datasource added" ]]; then
     fail "Datasource creation failed"
   fi
   echo "${FUNCNAME[0]}: Prometheus datasource for Grafana added"
@@ -167,7 +165,7 @@ EOF
   # To add additional dashboards, browse the URL above and import the dashboard via the id displayed for the dashboard
   # Select the home icon (upper left), Dashboards / Import, enter the id, select load, and select the Prometheus datasource
 
-  cd ~/prometheus/dashboards
+  cd ~/models/tools/prometheus/dashboards
   boards=$(ls)
   for board in $boards; do
     curl -X POST -u admin:admin -H "Accept: application/json" -H "Content-type: application/json" -d @${board} http://$grafana_ip:3000/api/dashboards/db

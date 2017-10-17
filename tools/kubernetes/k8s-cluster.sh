@@ -1,12 +1,12 @@
 #!/bin/bash
 # Copyright 2017 AT&T Intellectual Property, Inc
-#  
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#  
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 #. What this is: script to setup a kubernetes cluster with calico as sni
-#. Prerequisites: 
+#. Prerequisites:
 #. - Ubuntu xenial server for master and agent nodes
 #. - key-based auth setup for ssh/scp between master and agent nodes
 #. - 192.168.0.0/16 should not be used on your server network interface subnets
@@ -75,7 +75,7 @@ function setup_k8s_master() {
   echo "${FUNCNAME[0]}: Setting up kubernetes master"
   setup_prereqs
 
-  # Install master 
+  # Install master
   bash /tmp/prereqs.sh master
   # per https://kubernetes.io/docs/setup/independent/create-cluster-kubeadm/
   # If the following command fails, run "kubeadm reset" before trying again
@@ -104,11 +104,11 @@ function setup_k8s_agents() {
 
   kubedns=$(kubectl get pods --all-namespaces | grep kube-dns | awk '{print $4}')
   while [[ "$kubedns" != "Running" ]]; do
-    echo "${FUNCNAME[0]}: kube-dns status is $kubedns. Waiting 60 seconds for it to be 'Running'" 
+    echo "${FUNCNAME[0]}: kube-dns status is $kubedns. Waiting 60 seconds for it to be 'Running'"
     sleep 60
     kubedns=$(kubectl get pods --all-namespaces | grep kube-dns | awk '{print $4}')
   done
-  echo "${FUNCNAME[0]}: kube-dns status is $kubedns" 
+  echo "${FUNCNAME[0]}: kube-dns status is $kubedns"
 
   for agent in $agents; do
     echo "${FUNCNAME[0]}: Install agent at $agent"
@@ -144,13 +144,13 @@ sudo apt update
 sudo apt-get install -y ntp ceph ceph-deploy
 EOF
   done
-  
+
   # per http://docs.ceph.com/docs/master/start/quick-ceph-deploy/
   # also https://upcommons.upc.edu/bitstream/handle/2117/101816/Degree_Thesis_Nabil_El_Alami.pdf#vote +1
   echo "${FUNCNAME[0]}: Create ceph config folder ~/ceph-cluster"
   mkdir ~/ceph-cluster
   cd ~/ceph-cluster
-  
+
   echo "${FUNCNAME[0]}: Create new cluster with $HOSTNAME as initial ceph-mon node"
   ceph-deploy new --cluster-network $cluster_net --public-network $public_net --no-ssh-copykey $HOSTNAME
   # Update conf per recommendations of http://docs.ceph.com/docs/jewel/rados/configuration/filesystem-recommendations/
@@ -180,7 +180,7 @@ EOF
       ceph-deploy osd activate ceph-osd$n:/ceph
       ((n++))
     done
-  else 
+  else
     echo "${FUNCNAME[0]}: Deploy OSDs"
     for node_ip in $node_ips; do
       echo "${FUNCNAME[0]}: Create ceph osd on $node_ip using $ceph_dev"
@@ -204,7 +204,7 @@ EOF
   fi
   mgr=$(kubectl get pods --all-namespaces | grep kube-controller-manager | awk '{print $4}')
   while [[ "$mgr" != "Running" ]]; do
-    echo "${FUNCNAME[0]}: kube-controller-manager status is $mgr. Waiting 60 seconds for it to be 'Running'" 
+    echo "${FUNCNAME[0]}: kube-controller-manager status is $mgr. Waiting 60 seconds for it to be 'Running'"
     sleep 60
     mgr=$(kubectl get pods --all-namespaces | grep kube-controller-manager | awk '{print $4}')
   done
@@ -274,7 +274,7 @@ EOF
   kubectl create -f /tmp/ceph-pvc.yaml
   while [[ "x$(kubectl get pvc -o jsonpath='{.status.phase}' claim1)" != "xBound" ]]; do
     echo "${FUNCNAME[0]}: Waiting for pvc claim1 to be 'Bound'"
-    kubectl describe pvc 
+    kubectl describe pvc
     sleep 10
   done
   echo "${FUNCNAME[0]}: pvc claim1 successfully bound to $(kubectl get pvc -o jsonpath='{.spec.volumeName}' claim1)"
@@ -367,9 +367,9 @@ function demo_chart() {
       ;;
     *)
       echo "${FUNCNAME[0]}: demo not implemented for $1"
-  esac    
+  esac
 # extra useful commands
-# kubectl describe pvc 
+# kubectl describe pvc
 # kubectl get pvc
 # kubectl describe pods
 # kubectl get pods --namespace default
@@ -396,7 +396,7 @@ function setup_helm() {
   # Wait till tiller is running
   tiller_deploy=$(kubectl get pods --all-namespaces | grep tiller-deploy | awk '{print $4}')
   while [[ "$tiller_deploy" != "Running" ]]; do
-    echo "${FUNCNAME[0]}: tiller-deploy status is $tiller_deploy. Waiting 60 seconds for it to be 'Running'" 
+    echo "${FUNCNAME[0]}: tiller-deploy status is $tiller_deploy. Waiting 60 seconds for it to be 'Running'"
     sleep 60
     tiller_deploy=$(kubectl get pods --all-namespaces | grep tiller-deploy | awk '{print $4}')
   done
