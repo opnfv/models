@@ -43,7 +43,9 @@ key=$1
 nodes="$2"
 admin_ip=$3
 agent_ips="$4"
-extras=$5
+priv_net=$5
+pub_net=$6
+extras=$7
 
 source ~/models/tools/maas/deploy.sh $1 "$2" $5
 eval `ssh-agent`
@@ -73,9 +75,12 @@ cd models/tools/prometheus
 bash prometheus-tools.sh all "$agent_ips"
 EOF
 echo "Setting up cloudify..."
-scp -o StrictHostKeyChecking=no ~/models/tools/cloudify/k8s-cloudify.sh \
+scp -r -o StrictHostKeyChecking=no ~/models/tools/cloudify \
   ubuntu@$admin_ip:/home/ubuntu/.
-ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip bash k8s-cloudify.sh prereqs
-ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip bash k8s-cloudify.sh setup
-ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip bash k8s-cloudify.sh demo
+ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip \
+  bash cloudify/k8s-cloudify.sh prereqs
+ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip \
+  bash cloudify/k8s-cloudify.sh setup
+ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip \
+  bash cloudify/k8s-cloudify.sh demo
 echo "All done!"
