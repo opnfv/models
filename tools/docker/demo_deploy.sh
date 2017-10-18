@@ -48,13 +48,16 @@ echo "Setting up Docker..."
 bash ~/models/tools/docker/docker-cluster.sh all $master "$workers"
 # TODO: Figure this out... Have to break the setup into two steps as something
 # causes the ssh session to end before the prometheus setup, if both scripts
-# (k8s-cluster and prometheus-tools) are in the same ssh session
+# are in the same ssh session
 echo "Setting up Prometheus..."
-scp -o StrictHostKeyChecking=no $key ubuntu@$master:/home/ubuntu/$key
-ssh -x -o StrictHostKeyChecking=no ubuntu@$master <<EOF
-git clone https://gerrit.opnfv.org/gerrit/models
+ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip mkdir -p \
+  /home/ubuntu/models/tools/prometheus
+scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
+  ubuntu@$admin_ip:/home/ubuntu/models/tools/prometheus
+ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip <<EOF
 exec ssh-agent bash
 ssh-add $key
-bash models/tools/prometheus/prometheus-tools.sh all "$master $workers"
+cd models/tools/prometheus
+bash prometheus-tools.sh all "$agent_ips"
 EOF
 echo "All done!"

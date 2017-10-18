@@ -46,20 +46,27 @@ eval `ssh-agent`
 ssh-add $key
 if [[ "x$extras" != "x" ]]; then source $extras; fi
 scp -o StrictHostKeyChecking=no $key ubuntu@$admin_ip:/home/ubuntu/$key
+scp -o StrictHostKeyChecking=no ~/models/tools/rancher/rancher-cluster.sh \
+  ubuntu@$admin_ip:/home/ubuntu/.
 echo "Setting up Rancher..."
 ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip <<EOF
 exec ssh-agent bash
 ssh-add $key
-git clone https://gerrit.opnfv.org/gerrit/models
-bash models/tools/rancher/rancher-cluster.sh all "$agent_ips"
+bash rancher-cluster.sh all "$agent_ips"
 EOF
 # TODO: Figure this out... Have to break the setup into two steps as something
 # causes the ssh session to end before the prometheus setup, if both scripts
-# (k8s-cluster and prometheus-tools) are in the same ssh session
+# are in the same ssh session
 echo "Setting up Prometheus..."
+ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip mkdir -p \
+  /home/ubuntu/models/tools/prometheus
+scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
+  ubuntu@$admin_ip:/home/ubuntu/models/tools/prometheus
 ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip <<EOF
 exec ssh-agent bash
 ssh-add $key
-bash models/tools/prometheus/prometheus-tools.sh all "$agent_ips"
+cd models/tools/prometheus
+bash prometheus-tools.sh all "$agent_ips"
 EOF
 echo "All done!"
+echo "Rancher server is accessible at http://$admin_ip:8080"
