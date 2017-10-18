@@ -130,7 +130,7 @@ EOF
     echo "${FUNCNAME[0]}: $job at $eip"
   done
   echo "${FUNCNAME[0]}: Prometheus dashboard is available at http://$host_ip:9090"
-  echo "Prometheus dashboard is available at http://$host_ip:9090" auto>/tmp/summary
+  echo "Prometheus dashboard is available at http://$host_ip:9090" >>/tmp/summary
 }
 
 function connect_grafana() {

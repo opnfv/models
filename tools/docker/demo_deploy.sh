@@ -22,17 +22,17 @@
 #.   Grafana dashboard: http://<master_public_ip>:3000
 #.
 #. Prerequisites:
-#. - Ubuntu server for cluster nodes (admin/master and worker nodes)
+#. - Ubuntu server for cluster nodes (master and worker nodes)
 #. - MAAS server as cluster admin for Rancher master/worker nodes
 #. - Password-less ssh key provided for node setup
 #. Usage: on the MAAS server
 #. $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
-#. $ bash ~/models/tools/docker/demo_deploy.sh <key> "<hosts>" <master_ip>
-#.     "<worker_ips>" [<extras>]
+#. $ bash ~/models/tools/docker/demo_deploy.sh <key> "<hosts>" <master>
+#.     "<workers>" [<extras>]
 #. <key>: name of private key for cluster node ssh (in current folder)
 #. <hosts>: space separated list of hostnames managed by MAAS
-#. <master_ip>: IP of master node
-#. <worker_ips>: space separated list of worker node IPs
+#. <master>: IP of master node
+#. <workers>: space separated list of worker node IPs
 #. <extras>: optional name of script for extra setup functions as needed
 
 key=$1
@@ -60,8 +60,12 @@ ssh-add $key
 cd models/tools/prometheus
 bash prometheus-tools.sh all "$agent_ips"
 EOF
+
 echo "All done!"
 echo "Demo app nginx is at http://$master:8080/ and on worker nodes port 8080"
 apiversion=$(curl http://$master:4243/version | jq -r '.ApiVersion')
 echo "Docker engine API is available at http://$master:4243"
 echo "API docs are at https://docs.docker.com/engine/api/v$apiversion/"
+echo "Prometheus UI is available at http://$master:9090"
+echo "Grafana dashboards are available at http://$master:3000 (login as admin/admin)"
+echo "Grafana API is available at http://admin:admin@$master:3000/api/v1/query?query=<string>"
