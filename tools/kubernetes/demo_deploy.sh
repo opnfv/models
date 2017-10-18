@@ -43,7 +43,9 @@ key=$1
 nodes="$2"
 admin_ip=$3
 agent_ips="$4"
-extras=$5
+priv_net=$5
+pub_net=$6
+extras=$7
 
 source ~/models/tools/maas/deploy.sh $1 "$2" $5
 eval `ssh-agent`
