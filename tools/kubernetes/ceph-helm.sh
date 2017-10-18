@@ -30,3 +30,57 @@
 #.
 #. Status: work in progress, incomplete
 #
+
+function setup_ceph() {
+  nodes=$1
+  private_net=$2
+  public_net=$3
+  dev=$4
+  # per https://github.com/att/netarbiter/tree/master/sds/ceph-docker/examples/helm
+  echo "${FUNCNAME[0]}: Clone netarbiter"
+  git clone https://github.com/att/netarbiter.git
+  
+  echo "${FUNCNAME[0]}: Create a .kube/config secret so that a K8s job could run kubectl inside the container"
+  cd netarbiter/sds/ceph-docker/examples/helm
+  kubectl create namespace ceph
+  ./create-secret-kube-config.sh ceph
+  ./helm-install-ceph.sh my_ceph_chart $private_net $public_net
+
+  kubedns=$(kubectl get service -o json --namespace kube-system kube-dns | \
+    jq -r '.spec.clusterIP')
+  case "$dev" in
+    sda)
+    sdb)
+      for node in $nodes; do
+        echo "${FUNCNAME[0]}: setup resolv.conf for $node"
+        echo <<EOF | sudo tee -a /etc/resolv/.conf
+nameserver $kubedns
+search ceph.svc.cluster.local svc.cluster.local cluster.local 
+EOF
+        echo "${FUNCNAME[0]}: Zap disk $dev at $node"
+        ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+          ubuntu@$node ceph-disk zap $dev
+        echo "${FUNCNAME[0]}: Run ceph-osd at $node"
+        name=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+          ubuntu@$node hostname)
+        ./helm-install-ceph-osd.sh $name /dev/$dev
+      done
+      ;;
+      *)
+      ;;
+  esac
+
+  echo "${FUNCNAME[0]}: Activate Ceph for namespace 'default'"
+  ./activate-namespace.sh default
+
+  echo "${FUNCNAME[0]}: Relax access control rules"
+  kubectl replace -f relax-rbac-k8s1.7.yaml
+
+  # TODO: verification tests
+}
+
+if [[ "$1" != "" ]]; then
+  setup_ceph "$1" $2 $3 $4
+else
+  grep '#. ' $0
+fi

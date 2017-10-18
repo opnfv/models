@@ -69,6 +69,8 @@ sudo apt-get update
 # TODO: reverify if this is still an issue in the final working script
 sudo apt-get -y install ceph-common
 sudo apt-get -y install --allow-downgrades kubectl=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00
+# Needed for ceph setup etc
+sudo apt-get -y jq
 EOG
 }
 
@@ -247,10 +249,10 @@ function setup_helm() {
 }
 
 function setup_ceph() {
-  if [[ "$4" .eq "helm" ]]; then
-    source ./ceph-helm.sh "$1" $2 $3 $4
+  if [[ "$4" == "helm" ]]; then
+    source ./ceph-helm.sh "$1" $2 $3 $5
   else
-    source ./ceph-baremetal.sh "$1" $2 $3 $4
+    source ./ceph-baremetal.sh "$1" $2 $3 $5
   fi
 }
 

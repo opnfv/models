@@ -192,7 +192,7 @@ EOF
   kubectl describe pods
 }
 
-if [[ "$1" .ne "" ]]; then
+if [[ "$1" != "" ]]; then
   setup_ceph "$1" $2 $3 $4
 else
   grep '#. ' $0
