@@ -61,3 +61,7 @@ cd models/tools/prometheus
 bash prometheus-tools.sh all "$agent_ips"
 EOF
 echo "All done!"
+echo "Demo app nginx is at http://$master:8080/ and on worker nodes port 8080"
+apiversion=$(curl http://$master:4243/version | jq -r '.ApiVersion')
+echo "Docker engine API is available at http://$master:4243"
+echo "API docs are at https://docs.docker.com/engine/api/v$apiversion/"
