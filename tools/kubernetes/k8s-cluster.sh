@@ -67,7 +67,7 @@ EOF
 sudo apt-get update
 # Next command is to workaround bug resulting in "PersistentVolumeClaim is not bound" for pod startup (remain in Pending)
 # TODO: reverify if this is still an issue in the final working script
-sudo apt-get -y install ceph-common
+sudo apt-get -y install ceph ceph-common
 sudo apt-get -y install --allow-downgrades kubectl=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00
 # Needed for ceph setup etc
 sudo apt-get -y install jq
@@ -229,6 +229,7 @@ function setup_helm() {
   chmod 700 get_helm.sh
   ./get_helm.sh
   helm init
+  nohup helm serve &
   helm repo update
   # TODO: Workaround for bug https://github.com/kubernetes/helm/issues/2224
   # For testing use only!
