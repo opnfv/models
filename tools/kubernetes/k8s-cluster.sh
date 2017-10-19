@@ -70,7 +70,7 @@ sudo apt-get update
 sudo apt-get -y install ceph-common
 sudo apt-get -y install --allow-downgrades kubectl=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00
 # Needed for ceph setup etc
-sudo apt-get -y jq
+sudo apt-get -y install jq
 EOG
 }
 
@@ -276,8 +276,8 @@ case "$1" in
   all)
     setup_k8s_master
     setup_k8s_agents "$2"
-    setup_ceph "$2" $3 $4 $5 $6
     setup_helm
+    setup_ceph "$2" $3 $4 $5 $6
     demo_chart dokuwiki
     ;;
   clean)

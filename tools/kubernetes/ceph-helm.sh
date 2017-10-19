@@ -48,27 +48,21 @@ function setup_ceph() {
 
   kubedns=$(kubectl get service -o json --namespace kube-system kube-dns | \
     jq -r '.spec.clusterIP')
-  case "$dev" in
-    sda)
-    sdb)
-      for node in $nodes; do
-        echo "${FUNCNAME[0]}: setup resolv.conf for $node"
-        echo <<EOF | sudo tee -a /etc/resolv/.conf
+
+  for node in $nodes; do
+    echo "${FUNCNAME[0]}: setup resolv.conf for $node"
+    echo <<EOF | sudo tee -a /etc/resolv.conf
 nameserver $kubedns
 search ceph.svc.cluster.local svc.cluster.local cluster.local 
 EOF
-        echo "${FUNCNAME[0]}: Zap disk $dev at $node"
-        ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-          ubuntu@$node ceph-disk zap $dev
-        echo "${FUNCNAME[0]}: Run ceph-osd at $node"
-        name=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-          ubuntu@$node hostname)
-        ./helm-install-ceph-osd.sh $name /dev/$dev
-      done
-      ;;
-      *)
-      ;;
-  esac
+    echo "${FUNCNAME[0]}: Zap disk $dev at $node"
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ubuntu@$node ceph-disk zap $dev
+    echo "${FUNCNAME[0]}: Run ceph-osd at $node"
+    name=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ubuntu@$node hostname)
+    ./helm-install-ceph-osd.sh $name /dev/$dev
+  done
 
   echo "${FUNCNAME[0]}: Activate Ceph for namespace 'default'"
   ./activate-namespace.sh default

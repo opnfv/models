@@ -30,7 +30,7 @@
 #. Usage: on the MAAS server
 #. $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
 #. $ bash ~/models/tools/kubernetes/demo_deploy.sh <key> "<hosts>" <master>
-#.     "<workers>" <pub-net> <priv-net> <ceph-mode> [<extras>]
+#.     "<workers>" <pub-net> <priv-net> <ceph-mode> <ceph-dev> [<extras>]
 #. <key>: name of private key for cluster node ssh (in current folder)
 #. <hosts>: space separated list of hostnames managed by MAAS
 #. <master>: IP of cluster master node
@@ -38,6 +38,7 @@
 #. <pub-net>: CID formatted public network
 #. <priv-net>: CIDR formatted private network (may be same as pub-net)
 #. <ceph-mode>: "helm" or "baremetal"
+#. <ceph-dev>: disk (e.g. sda, sdb) or folder (e.g. "/ceph")
 #. <extras>: optional name of script for extra setup functions as needed
 
 key=$1
@@ -47,9 +48,10 @@ workers="$4"
 priv_net=$5
 pub_net=$6
 ceph_mode=$7
-extras=$8
+ceph_dev=$8
+extras=$9
 
-source ~/models/tools/maas/deploy.sh $1 "$2" $8
+source ~/models/tools/maas/deploy.sh $1 "$2" $9
 eval `ssh-agent`
 ssh-add $key
 if [[ "x$extras" != "x" ]]; then source $extras; fi
@@ -60,7 +62,7 @@ scp -r -o StrictHostKeyChecking=no ~/models/tools/kubernetes/* \
 ssh -x -o StrictHostKeyChecking=no ubuntu@$master <<EOF
 exec ssh-agent bash
 ssh-add $key
-bash k8s-cluster.sh all "$workers" $priv_net $pub_net $ceph_mode
+bash k8s-cluster.sh all "$workers" $priv_net $pub_net $ceph_mode $ceph_dev
 EOF
 # TODO: Figure this out... Have to break the setup into two steps as something
 # causes the ssh session to end before the prometheus setup, if both scripts
