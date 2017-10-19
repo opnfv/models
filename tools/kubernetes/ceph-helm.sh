@@ -57,7 +57,7 @@ search ceph.svc.cluster.local svc.cluster.local cluster.local
 EOF
     echo "${FUNCNAME[0]}: Zap disk $dev at $node"
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$node ceph-disk zap $dev
+      ubuntu@$node sudo ceph-disk zap $dev
     echo "${FUNCNAME[0]}: Run ceph-osd at $node"
     name=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
       ubuntu@$node hostname)
