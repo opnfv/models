@@ -38,7 +38,7 @@ function setup_ceph() {
   dev=$4
   # per https://github.com/att/netarbiter/tree/master/sds/ceph-docker/examples/helm
   echo "${FUNCNAME[0]}: Clone netarbiter"
-  git clone https://github.com/blsaws/netarbiter.git
+  git clone https://github.com/att/netarbiter.git
   
   echo "${FUNCNAME[0]}: Create a .kube/config secret so that a K8s job could run kubectl inside the container"
   cd netarbiter/sds/ceph-docker/examples/helm
@@ -49,17 +49,20 @@ function setup_ceph() {
   kubedns=$(kubectl get service -o json --namespace kube-system kube-dns | \
     jq -r '.spec.clusterIP')
 
-  cat <<EOF | sudo tee -a /etc/resolv.conf
+  cat <<EOF | sudo tee /etc/resolv.conf
 nameserver $kubedns
-search ceph.svc.cluster.local svc.cluster.local cluster.local 
+search ceph.svc.cluster.local svc.cluster.local cluster.local
+options ndots:5
 EOF
 
   for node in $nodes; do
     echo "${FUNCNAME[0]}: setup resolv.conf for $node"
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no <<EOG
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ubuntu@$node <<EOG
 cat <<EOF | sudo tee -a /etc/resolv.conf
 nameserver $kubedns
 search ceph.svc.cluster.local svc.cluster.local cluster.local 
+options ndots:5
 EOF
 EOG
     echo "${FUNCNAME[0]}: Zap disk $dev at $node"
