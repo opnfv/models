@@ -49,12 +49,19 @@ function setup_ceph() {
   kubedns=$(kubectl get service -o json --namespace kube-system kube-dns | \
     jq -r '.spec.clusterIP')
 
-  for node in $nodes; do
-    echo "${FUNCNAME[0]}: setup resolv.conf for $node"
-    cat <<EOF | sudo tee -a /etc/resolv.conf
+  cat <<EOF | sudo tee -a /etc/resolv.conf
 nameserver $kubedns
 search ceph.svc.cluster.local svc.cluster.local cluster.local 
 EOF
+
+  for node in $nodes; do
+    echo "${FUNCNAME[0]}: setup resolv.conf for $node"
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no <<EOG
+cat <<EOF | sudo tee -a /etc/resolv.conf
+nameserver $kubedns
+search ceph.svc.cluster.local svc.cluster.local cluster.local 
+EOF
+EOG
     echo "${FUNCNAME[0]}: Zap disk $dev at $node"
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
       ubuntu@$node sudo ceph-disk zap /dev/$dev
