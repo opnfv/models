@@ -51,18 +51,22 @@ function setup_ceph() {
 
   for node in $nodes; do
     echo "${FUNCNAME[0]}: setup resolv.conf for $node"
-    echo <<EOF | sudo tee -a /etc/resolv.conf
+    cat <<EOF | sudo tee -a /etc/resolv.conf
 nameserver $kubedns
 search ceph.svc.cluster.local svc.cluster.local cluster.local 
 EOF
     echo "${FUNCNAME[0]}: Zap disk $dev at $node"
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$node sudo ceph-disk zap $dev
+      ubuntu@$node sudo ceph-disk zap /dev/$dev
     echo "${FUNCNAME[0]}: Run ceph-osd at $node"
     name=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
       ubuntu@$node hostname)
     ./helm-install-ceph-osd.sh $name /dev/$dev
   done
+
+  echo "${FUNCNAME[0]}: WORKAROUND take ownership of .kube"
+  # TODO: find out why this is needed
+  sudo chown -R ubuntu:ubuntu ~/.kube/*
 
   echo "${FUNCNAME[0]}: Activate Ceph for namespace 'default'"
   ./activate-namespace.sh default
@@ -71,6 +75,71 @@ EOF
   kubectl replace -f relax-rbac-k8s1.7.yaml
 
   # TODO: verification tests
+
+  echo "${FUNCNAME[0]}: Create rdb storageClass 'slow'"
+  cat <<EOF >/tmp/ceph-sc.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+   name: slow
+provisioner: kubernetes.io/rbd
+parameters:
+    monitors: $mon_ip:6789
+    adminId: admin
+    adminSecretName: ceph-secret-admin
+    adminSecretNamespace: "kube-system"
+    pool: kube
+    userId: kube
+    userSecretName: ceph-secret-user
+EOF
+
+  echo "${FUNCNAME[0]}: Create storage pool 'kube'"
+  # https://github.com/kubernetes/examples/blob/master/staging/persistent-volume-provisioning/README.md method
+  sudo ceph osd pool create kube 32 32
+
+  echo "${FUNCNAME[0]}: Authorize client 'kube' access to pool 'kube'"
+  sudo ceph auth get-or-create client.kube mon 'allow r' osd 'allow rwx pool=kube'
+
+  echo "${FUNCNAME[0]}: Create ceph-secret-user secret in namespace 'default'"
+  kube_key=$(sudo ceph auth get-key client.kube)
+  kubectl create secret generic ceph-secret-user --from-literal=key="$kube_key" --namespace=default --type=kubernetes.io/rbd
+  # A similar secret must be created in other namespaces that intend to access the ceph pool
+
+  # Per https://github.com/kubernetes/examples/blob/master/staging/persistent-volume-provisioning/README.md
+
+  echo "${FUNCNAME[0]}: Create andtest a persistentVolumeClaim"
+  cat <<EOF >/tmp/ceph-pvc.yaml
+{
+  "kind": "PersistentVolumeClaim",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "claim1",
+    "annotations": {
+        "volume.beta.kubernetes.io/storage-class": "slow"
+    }
+  },
+  "spec": {
+    "accessModes": [
+      "ReadWriteOnce"
+    ],
+    "resources": {
+      "requests": {
+        "storage": "3Gi"
+      }
+    }
+  }
+}
+EOF
+  kubectl create -f /tmp/ceph-pvc.yaml
+  while [[ "x$(kubectl get pvc -o jsonpath='{.status.phase}' claim1)" != "xBound" ]]; do
+    echo "${FUNCNAME[0]}: Waiting for pvc claim1 to be 'Bound'"
+    kubectl describe pvc
+    sleep 10
+  done
+  echo "${FUNCNAME[0]}: pvc claim1 successfully bound to $(kubectl get pvc -o jsonpath='{.spec.volumeName}' claim1)"
+  kubectl get pvc
+  kubectl delete pvc claim1
+  kubectl describe pods
 }
 
 if [[ "$1" != "" ]]; then
