@@ -103,6 +103,8 @@ parameters:
     userSecretName: ceph-secret-user
 EOF
 
+  kubectl create -f /tmp/ceph-sc.yaml
+
   echo "${FUNCNAME[0]}: Create storage pool 'kube'"
   # https://github.com/kubernetes/examples/blob/master/staging/persistent-volume-provisioning/README.md method
   sudo ceph osd pool create kube 32 32
