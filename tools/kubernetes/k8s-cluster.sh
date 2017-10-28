@@ -162,13 +162,13 @@ function demo_chart() {
       # LoadBalancer is N/A for baremetal (public cloud only) - use NodePort
       sed -i -- 's/LoadBalancer/NodePort/g' ./mediawiki/values.yaml
       # Select the storageClass created in the ceph setup step
-      sed -i -- 's/# storageClass:/storageClass: "slow"/g' ./mediawiki/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "slow"/g' ./mediawiki/charts/mariadb/values.yaml
+      sed -i -- 's/# storageClass:/storageClass: "general"/g' ./mediawiki/values.yaml
+      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./mediawiki/charts/mariadb/values.yaml
       helm install --name mw -f ./mediawiki/values.yaml ./mediawiki
       wait_for_service mw-mediawiki
       ;;
     dokuwiki)
-      sed -i -- 's/# storageClass:/storageClass: "slow"/g' ./dokuwiki/values.yaml
+      sed -i -- 's/# storageClass:/storageClass: "general"/g' ./dokuwiki/values.yaml
       sed -i -- 's/LoadBalancer/NodePort/g' ./dokuwiki/values.yaml
       helm install --name dw -f ./dokuwiki/values.yaml ./dokuwiki
       wait_for_service dw-dokuwiki
@@ -179,8 +179,8 @@ function demo_chart() {
       mkdir ./wordpress/charts
       cp -r ./mariadb ./wordpress/charts
       sed -i -- 's/LoadBalancer/NodePort/g' ./wordpress/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "slow"/g' ./wordpress/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "slow"/g' ./wordpress/charts/mariadb/values.yaml
+      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./wordpress/values.yaml
+      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./wordpress/charts/mariadb/values.yaml
       helm install --name wp -f ./wordpress/values.yaml ./wordpress
       wait_for_service wp-wordpress
       ;;
@@ -191,9 +191,9 @@ function demo_chart() {
       cp -r ./mariadb ./redmine/charts
       cp -r ./postgresql ./redmine/charts
       sed -i -- 's/LoadBalancer/NodePort/g' ./redmine/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "slow"/g' ./redmine/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "slow"/g' ./redmine/charts/mariadb/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "slow"/g' ./redmine/charts/postgresql/values.yaml
+      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./redmine/values.yaml
+      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./redmine/charts/mariadb/values.yaml
+      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./redmine/charts/postgresql/values.yaml
       helm install --name rdm -f ./redmine/values.yaml ./redmine
       wait_for_service rdm-redmine
       ;;
@@ -202,8 +202,8 @@ function demo_chart() {
       mkdir ./owncloud/charts
       cp -r ./mariadb ./owncloud/charts
       sed -i -- 's/LoadBalancer/NodePort/g' ./owncloud/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "slow"/g' ./owncloud/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "slow"/g' ./owncloud/charts/mariadb/values.yaml
+      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./owncloud/values.yaml
+      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./owncloud/charts/mariadb/values.yaml
       helm install --name oc -f ./owncloud/values.yaml ./owncloud
       wait_for_service oc-owncloud
       ;;

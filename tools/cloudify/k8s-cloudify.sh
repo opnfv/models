@@ -14,12 +14,12 @@
 # limitations under the License.
 #
 #. What this is: Setup script for Cloudify use with Kubernetes.
-#. Prerequisites: 
+#. Prerequisites:
 #. - Kubernetes cluster installed per k8s-cluster.sh (in this repo)
 #. Usage:
 #.   From a server with access to the kubernetes master node:
 #.   $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
-#.   $ scp -r ~/models/tools/cloudify ubuntu@<k8s-master>:/home/ubuntu/. 
+#.   $ scp -r ~/models/tools/cloudify ubuntu@<k8s-master>:/home/ubuntu/.
 #.     <k8s-master>: IP or hostname of kubernetes master server
 #.   $ ssh -x ubuntu@<k8s-master> cloudify/k8s-cloudify.sh prereqs
 #.     prereqs: installs prerequisites and configures ubuntu user for kvm use
@@ -31,7 +31,7 @@ function prereqs() {
   sudo apt-get install -y virtinst qemu-kvm libguestfs-tools virtualenv git python-pip
   echo "${FUNCNAME[0]}: Setup $USER for kvm use"
   # Per http://libguestfs.org/guestfs-faq.1.html
-  # workaround for virt-customize warning: libguestfs: warning: current user is not a member of the KVM group (group ID 121). This user cannot access /dev/kvm, so libguestfs may run very slowly. It is recommended that you 'chmod 0666 /dev/kvm' or add the current user to the KVM group (you might need to log out and log in again). 
+  # workaround for virt-customize warning: libguestfs: warning: current user is not a member of the KVM group (group ID 121). This user cannot access /dev/kvm, so libguestfs may run very slowly. It is recommended that you 'chmod 0666 /dev/kvm' or add the current user to the KVM group (you might need to log out and log in again).
   # Also see: https://help.ubuntu.com/community/KVM/Installation
   # also to avoid permission denied errors in guestfish, from http://manpages.ubuntu.com/manpages/zesty/man1/guestfs-faq.1.html
   sudo usermod -a -G kvm $USER
@@ -72,7 +72,7 @@ function setup () {
     sleep 60
   done
   cfy status
-  
+
   echo "${FUNCNAME[0]}: Install Cloudify Kubernetes Plugin"
   # Per http://docs.getcloudify.org/4.1.0/plugins/container-support/
   # Per https://github.com/cloudify-incubator/cloudify-kubernetes-plugin
@@ -84,7 +84,7 @@ function setup () {
   # For Cloudify-Manager per https://github.com/cloudify-incubator/cloudify-kubernetes-plugin/blob/master/examples/persistent-volumes-blueprint.yaml
   cfy plugins upload cloudify_kubernetes_plugin-1.2.1-py27-none-linux_x86_64-centos-Core.wgn
 
-  echo "${FUNCNAME[0]}: Create secrets for kubernetes as referenced in blueprints"  
+  echo "${FUNCNAME[0]}: Create secrets for kubernetes as referenced in blueprints"
   cfy secrets create -s $(grep server ~/.kube/config | awk -F '/' '{print $3}' | awk -F ':' '{print $1}') kubernetes_master_ip
   cfy secrets create -s $(grep server ~/.kube/config | awk -F '/' '{print $3}' | awk -F ':' '{print $2}') kubernetes_master_port
   cfy secrets create -s $(grep 'certificate-authority-data: ' ~/.kube/config | awk -F ' ' '{print $2}') kubernetes_certificate_authority_data

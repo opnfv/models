@@ -123,12 +123,12 @@ EOF
   admin_key=$(sudo ceph auth get-key client.admin)
   kubectl create secret generic ceph-secret-admin --from-literal=key="$admin_key" --namespace=kube-system --type=kubernetes.io/rbd
 
-  echo "${FUNCNAME[0]}: Create rdb storageClass 'slow'"
+  echo "${FUNCNAME[0]}: Create rdb storageClass 'general'"
   cat <<EOF >/tmp/ceph-sc.yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-   name: slow
+   name: general
 provisioner: kubernetes.io/rbd
 parameters:
     monitors: $mon_ip:6789
@@ -165,7 +165,7 @@ EOF
   "metadata": {
     "name": "claim1",
     "annotations": {
-        "volume.beta.kubernetes.io/storage-class": "slow"
+        "volume.beta.kubernetes.io/storage-class": "general"
     }
   },
   "spec": {
