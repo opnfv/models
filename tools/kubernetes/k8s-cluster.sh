@@ -38,6 +38,9 @@
 #. $ bash k8s-cluster.sh all "<nodes>" <cluster-net> <public-net> <ceph-mode> [ceph_dev]
 #.     Runs all the steps above
 #.
+#. When deployment is complete, the k8s API will be available at the master
+#. node, e.g. via: curl -k https://<master-ip>:6443/api/v1
+#.
 #. Status: work in progress, incomplete
 #
 

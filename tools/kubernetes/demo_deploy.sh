@@ -56,7 +56,7 @@ eval `ssh-agent`
 ssh-add $key
 if [[ "x$extras" != "x" ]]; then source $extras; fi
 scp -o StrictHostKeyChecking=no $key ubuntu@$master:/home/ubuntu/$key
-echo "Setting up kubernetes..."
+echo "$0 $(date): Setting up kubernetes..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/kubernetes/* \
   ubuntu@$master:/home/ubuntu/.
 ssh -x -o StrictHostKeyChecking=no ubuntu@$master <<EOF
@@ -78,7 +78,7 @@ ssh-add $key
 cd models/tools/prometheus
 bash prometheus-tools.sh all "$workers"
 EOF
-echo "Setting up cloudify..."
+echo "$0 $(date): Setting up cloudify..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/cloudify \
   ubuntu@$master:/home/ubuntu/.
 ssh -x -o StrictHostKeyChecking=no ubuntu@$master \
@@ -88,7 +88,7 @@ ssh -x -o StrictHostKeyChecking=no ubuntu@$master \
 ssh -x -o StrictHostKeyChecking=no ubuntu@$master \
   bash cloudify/k8s-cloudify.sh demo
 
-echo "All done!"
+echo "$0 $(date): All done!"
 export NODE_PORT=$(ssh -x -o StrictHostKeyChecking=no ubuntu@$master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
 export NODE_IP=$(ssh -x -o StrictHostKeyChecking=no ubuntu@$master  kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
 echo "Helm chart demo app dokuwiki is available at http://$NODE_IP:$NODE_PORT/"
