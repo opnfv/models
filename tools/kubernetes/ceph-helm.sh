@@ -146,10 +146,10 @@ EOG
 
   log "Attach the pvc to a job and check if the job is successful (i.e., 1)"
   kubectl create -f tests/ceph/job.yaml
-  status=$(kubectl get jobs ceph-secret-generator -n ceph -o json | jq -r '.status.succeeded')
+  status=$(kubectl get jobs ceph-test-job -n default -o json | jq -r '.status.succeeded')
   if [[ "$status" != "1" ]]; then
     log "pvc attachment was not successful:"
-    kubectl get jobs ceph-secret-generator -n ceph -o json
+    kubectl get jobs ceph-test-job -n default -o json
     exit 1
   fi
 
@@ -164,7 +164,7 @@ EOG
   done
   log "test job succeeded"
 
-  kubectl delete jobs ceph-secret-generator -n ceph
+  kubectl delete jobs ceph-test-job -n default
   kubectl delete pvc ceph-test
   log "Ceph setup complete!"
 }
