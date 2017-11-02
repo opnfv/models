@@ -237,7 +237,7 @@ function setup_helm() {
   chmod 700 get_helm.sh
   ./get_helm.sh
   helm init
-  nohup helm serve &
+  nohup helm serve > /dev/null 2>&1 &
   helm repo update
   # TODO: Workaround for bug https://github.com/kubernetes/helm/issues/2224
   # For testing use only!
