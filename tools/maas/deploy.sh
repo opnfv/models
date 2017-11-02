@@ -26,20 +26,26 @@
 #. <hosts>: space separated list of hostnames managed by MAAS
 #. <extras>: optional name of script for extra setup functions as needed
 
+function log() {
+  f=$(caller 0 | awk '{print $2}')
+  l=$(caller 0 | awk '{print $1}')
+  echo "$f:$l ($(date)) $1"
+}
+
 function wait_node_status() {
   status=$(maas opnfv machines read hostname=$1 | jq -r ".[0].status_name")
   while [[ "x$status" != "x$2" ]]; do
-    echo "$0 $(date): $1 status is $status ... waiting for it to be $2"
+    log "$1 status is $status ... waiting for it to be $2"
     sleep 30
     status=$(maas opnfv machines read hostname=$1 | jq -r ".[0].status_name")
   done
-  echo "$0 $(date): $1 status is $status"
+  log "$1 status is $status"
 }
 
 function release_nodes() {
   nodes=$1
   for node in $nodes; do
-    echo "$0 $(date): Releasing node $node"
+    log "Releasing node $node"
     id=$(maas opnfv machines read hostname=$node | jq -r '.[0].system_id')
     maas opnfv machines release machines=$id
   done
@@ -48,7 +54,7 @@ function release_nodes() {
 function deploy_nodes() {
   nodes=$1
   for node in $nodes; do
-    echo "$0 $(date): Deploying node $node"
+    log "Deploying node $node"
     id=$(maas opnfv machines read hostname=$node | jq -r '.[0].system_id')
     maas opnfv machines allocate system_id=$id
     maas opnfv machine deploy $id

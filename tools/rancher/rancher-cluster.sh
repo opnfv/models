@@ -40,11 +40,17 @@
 #. See below for function-specific usage
 #.
 
+function log() {
+  f=$(caller 0 | awk '{print $2}')
+  l=$(caller 0 | awk '{print $1}')
+  echo "$f:$l ($(date)) $1"
+}
+
 # Install master
 function setup_master() {
   docker_installed=$(dpkg-query -W --showformat='${Status}\n' docker-ce | grep -c "install ok")
   if [[ $docker_installed == 0 ]]; then
-    echo "${FUNCNAME[0]}: installing and starting docker"
+    log "installing and starting docker"
     # Per https://docs.docker.com/engine/installation/linux/docker-ce/ubuntu/
     sudo apt-get remove -y docker docker-engine docker.io
     sudo apt-get update
@@ -64,23 +70,23 @@ function setup_master() {
     sudo apt-get update
     sudo apt-get install -y docker-ce
 
-    echo "${FUNCNAME[0]}: installing jq"
+    log "installing jq"
     sudo apt-get install -y jq
   fi
 
-  echo "${FUNCNAME[0]}: installing rancher server (master)"
+  log "installing rancher server (master)"
   sudo docker run -d --restart=unless-stopped -p 8080:8080 --name rancher rancher/server
 
-  echo "${FUNCNAME[0]}: wait until server is up at http://$1:8080"
+  log "wait until server is up at http://$1:8080"
   delay=0
   id=$(wget -qO- http://$1:8080/v2-beta/projects/ | jq -r '.data[0].id')
   while [[ "$id" == "" ]]; do
-    echo "${FUNCNAME[0]}: rancher server is not yet up, checking again in 10 seconds"
+    log "rancher server is not yet up, checking again in 10 seconds"
     sleep 10
     let delay=$delay+10
     id=$(wget -qO- http://$1:8080/v2-beta/projects/ | jq -r '.data[0].id')
   done
-  echo "${FUNCNAME[0]}: rancher server is up after $delay seconds"
+  log "rancher server is up after $delay seconds"
 
   rm -rf ~/rancher
   mkdir ~/rancher
@@ -89,21 +95,21 @@ function setup_master() {
 # Install rancher CLI tools
 # Usage example: install_cli_tools 172.16.0.2
 function install_cli_tools() {
-  echo "${FUNCNAME[0]}: installing rancher CLI tools for master $1"
+  log "installing rancher CLI tools for master $1"
   cd ~
-  echo "${FUNCNAME[0]}: install Rancher CLI"
+  log "install Rancher CLI"
   rm -rf rancher-v0.6.3
   wget -q https://releases.rancher.com/cli/v0.6.3/rancher-linux-amd64-v0.6.3.tar.gz
   gzip -d -f rancher-linux-amd64-v0.6.3.tar.gz
   tar -xvf rancher-linux-amd64-v0.6.3.tar
   sudo mv rancher-v0.6.3/rancher /usr/bin/rancher
-  echo "${FUNCNAME[0]}: install Rancher Compose"
+  log "install Rancher Compose"
   rm -rf rancher-compose-v0.12.5
   wget -q https://releases.rancher.com/compose/v0.12.5/rancher-compose-linux-amd64-v0.12.5.tar.gz
   gzip -d -f rancher-compose-linux-amd64-v0.12.5.tar.gz
   tar -xvf rancher-compose-linux-amd64-v0.12.5.tar
   sudo mv rancher-compose-v0.12.5/rancher-compose /usr/bin/rancher-compose
-  echo "${FUNCNAME[0]}: setup Rancher CLI environment"
+  log "setup Rancher CLI environment"
   # CLI setup http://rancher.com/docs/rancher/v1.6/en/cli/
   # Under the UI "API" select "Add account API key" and name it. Export the keys:
   # The following scripted approach assumes you have 1 project/environment (Default)
@@ -123,7 +129,7 @@ $RANCHER_SECRET_KEY
 EOF
 
   master=$(rancher config --print | jq -r '.url' | cut -d '/' -f 3)
-  echo "${FUNCNAME[0]}: Create registration token"
+  log "Create registration token"
   # added sleep to allow server time to be ready to create registration tokens (otherwise error is returned)
   sleep 5
   curl -s -o /tmp/token -X POST -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"name":"master"}' http://$master/v1/registrationtokens
@@ -132,22 +138,22 @@ EOF
     curl -s -o /tmp/token -X POST -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"name":"master"}' http://$master/v1/registrationtokens
   done
   id=$(jq -r ".id" /tmp/token)
-  echo "${FUNCNAME[0]}: registration token id=$id"
+  log "registration token id=$id"
 
-  echo "${FUNCNAME[0]}: wait until registration command is created"
+  log "wait until registration command is created"
   command=$(curl -s -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' http://$master/v1/registrationtokens/$id | jq -r '.command')
   while [[ "$command" == "null" ]]; do
-    echo "${FUNCNAME[0]}: registration command is not yet created, checking again in 10 seconds"
+    log "registration command is not yet created, checking again in 10 seconds"
     sleep 10
     command=$(curl -s -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' http://$master/v1/registrationtokens/$id | jq -r '.command')
   done
 
   export RANCHER_REGISTER_COMMAND="$command"
 
-#  echo "${FUNCNAME[0]}: activate rancher debug"
+#  log "activate rancher debug"
 #  export RANCHER_CLIENT_DEBUG=true
 
-  echo "${FUNCNAME[0]}: Install docker-compose for syntax checks"
+  log "Install docker-compose for syntax checks"
   sudo apt install -y docker-compose
 
   cd ~/rancher
@@ -156,43 +162,43 @@ EOF
 # Start an agent host
 # Usage example: start_host Default 172.16.0.7
 function setup_agent() {
-  echo "${FUNCNAME[0]}: SSH to host $2 in env $1 and execute registration command"
+  log "SSH to host $2 in env $1 and execute registration command"
 
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$2 "sudo apt-get install -y docker.io; sudo service docker start"
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$2 $RANCHER_REGISTER_COMMAND
 
-  echo "${FUNCNAME[0]}: wait until agent $2 is active"
+  log "wait until agent $2 is active"
   delay=0
   id=$(rancher hosts | awk "/$2/{print \$1}")
   while [[ "$id" == "" ]]; do
-    echo "${FUNCNAME[0]}: agent $2 is not yet created, checking again in 10 seconds"
+    log "agent $2 is not yet created, checking again in 10 seconds"
     sleep 10
     let delay=$delay+10
     id=$(rancher hosts | awk "/$2/{print \$1}")
   done
 
-  echo "${FUNCNAME[0]}: agent $2 id=$id"
+  log "agent $2 id=$id"
   state=$(rancher inspect $id | jq -r '.state')
   while [[ "$state" != "active" ]]; do
-    echo "${FUNCNAME[0]}: host $2 state is $state, checking again in 10 seconds"
+    log "host $2 state is $state, checking again in 10 seconds"
     sleep 10
     let delay=$delay+10
     state=$(rancher inspect $id | jq -r '.state')
   done
-  echo "${FUNCNAME[0]}: agent $2 state is $state after $delay seconds"
+  log "agent $2 state is $state after $delay seconds"
 }
 
 # Delete an agent host
 # Usage example: delete_host 172.16.0.7
 function stop_agent() {
-  echo "${FUNCNAME[0]}: deleting host $1"
+  log "deleting host $1"
   rancher rm --stop $(rancher hosts | awk "/$1/{print \$1}")
 }
 
 # Test service at access points
 # Usage example: check_service nginx/nginx http "Welcome to nginx!"
 function check_service() {
-  echo "${FUNCNAME[0]}: checking service state for $1 over $2 with match string $3"
+  log "checking service state for $1 over $2 with match string $3"
   service=$1
   scheme=$2
   match="$3"
@@ -217,7 +223,7 @@ function wait_till_healthy() {
   tries=$2
 
   let delay=$tries*10
-  echo "${FUNCNAME[0]}: waiting for service $service to be ready in $delay seconds"
+  log "waiting for service $service to be ready in $delay seconds"
   id=$(rancher ps | grep " $service " | awk "{print \$1}")
   health=$(rancher inspect $id | jq -r ".healthState")
   state=$(rancher inspect $id | jq -r ".state")
@@ -233,7 +239,7 @@ function wait_till_healthy() {
 # Usage example: start_simple_service nginx nginx:latest 8081:80 3
 # Usage example: start_simple_service dokuwiki ununseptium/dokuwiki-docker 8082:80 2
 function start_simple_service() {
-  echo "${FUNCNAME[0]}: starting service $1 with image $2, ports $3, and scale $4"
+  log "starting service $1 with image $2, ports $3, and scale $4"
   service=$1
   image=$2
   # port is either a single (unexposed) port, or an source:target pair (source
@@ -241,10 +247,10 @@ function start_simple_service() {
   ports=$3
   scale=$4
 
-  echo "${FUNCNAME[0]}: creating service folder ~/rancher/$service"
+  log "creating service folder ~/rancher/$service"
   mkdir ~/rancher/$service
   cd  ~/rancher/$service
-  echo "${FUNCNAME[0]}: creating docker-compose.yml"
+  log "creating docker-compose.yml"
   # Define service via docker-compose.yml
   cat <<EOF >docker-compose.yml
 version: '2'
@@ -255,10 +261,10 @@ services:
       - "$ports"
 EOF
 
-  echo "${FUNCNAME[0]}: syntax checking docker-compose.yml"
+  log "syntax checking docker-compose.yml"
   docker-compose -f docker-compose.yml config
 
-  echo "${FUNCNAME[0]}: creating rancher-compose.yml"
+  log "creating rancher-compose.yml"
   cat <<EOF >rancher-compose.yml
 version: '2'
 services:
@@ -267,7 +273,7 @@ services:
     scale: $scale
 EOF
 
-  echo "${FUNCNAME[0]}: starting service $service"
+  log "starting service $service"
   rancher up -s $service -d
 
   wait_till_healthy "$service/$service" 6
@@ -278,13 +284,13 @@ EOF
 # Usage example: lb_service nginx 8000 8081
 # Usage example: lb_service dokuwiki 8001 8082
 function lb_service() {
-  echo "${FUNCNAME[0]}: adding load balancer port $2 to service $1, port $3"
+  log "adding load balancer port $2 to service $1, port $3"
   service=$1
   lbport=$2
   port=$3
 
   cd  ~/rancher/$service
-  echo "${FUNCNAME[0]}: creating docker-compose-lb.yml"
+  log "creating docker-compose-lb.yml"
   # Define lb service via docker-compose.yml
   cat <<EOF >docker-compose-lb.yml
 version: '2'
@@ -295,10 +301,10 @@ services:
     image: rancher/lb-service-haproxy:latest
 EOF
 
-  echo "${FUNCNAME[0]}: syntax checking docker-compose-lb.yml"
+  log "syntax checking docker-compose-lb.yml"
   docker-compose -f docker-compose-lb.yml config
 
-  echo "${FUNCNAME[0]}: creating rancher-compose-lb.yml"
+  log "creating rancher-compose-lb.yml"
   cat <<EOF >rancher-compose-lb.yml
 version: '2'
 services:
@@ -317,7 +323,7 @@ services:
       response_timeout: 2000
 EOF
 
-  echo "${FUNCNAME[0]}: starting service lb"
+  log "starting service lb"
   rancher up -s $service -d --file docker-compose-lb.yml --rancher-file rancher-compose-lb.yml
 
   wait_till_healthy "$service/lb" 6
@@ -327,7 +333,7 @@ EOF
 # Change scale of a service
 # Usage example: scale_service nginx 1
 function scale_service() {
-  echo "${FUNCNAME[0]}: scaling service $1 to $2 instances"
+  log "scaling service $1 to $2 instances"
   id=$(rancher ps | grep " $1 " | awk '{print $1}')
   rancher scale $id=$2
 
@@ -348,20 +354,20 @@ function public_endpoint() {
     id=$(rancher ps | grep " $1 " | awk "{print \$1}")
     ip=$(rancher inspect $id | jq -r ".publicEndpoints[0].ipAddress")
     port=$(rancher inspect $id | jq -r ".publicEndpoints[0].port")
-    echo "${FUNCNAME[0]}: $1 is accessible at http://$ip:$port"
+    log "$1 is accessible at http://$ip:$port"
 }
 
 # Stop a stack
 # Usage example: stop_stack nginx
 function stop_stack() {
-  echo "${FUNCNAME[0]}: stopping stack $1"
+  log "stopping stack $1"
   rancher stop $(rancher stacks | awk "/$1/{print \$1}")
 }
 
 # Start a stopped stack
 # Usage example: start_stack nginx
 function start_stack() {
-  echo "${FUNCNAME[0]}: starting stack $1"
+  log "starting stack $1"
   rancher start $(rancher stacks | awk "/$1/{print \$1}")
   wait_till_healthy $1 6
 }
@@ -370,7 +376,7 @@ function start_stack() {
 # Usage example: delete_stack dokuwiki
 function delete_stack() {
   id=$(rancher stacks | grep "$1" | awk "{print \$1}")
-  echo "${FUNCNAME[0]}: deleting stack $1 with id $id"
+  log "deleting stack $1 with id $id"
   rancher rm --stop $id
 }
 
@@ -378,24 +384,24 @@ function delete_stack() {
 # Usage example: delete_service nginx/lb
 function delete_service() {
   id=$(rancher ps | grep "$1" | awk "{print \$1}")
-  echo "${FUNCNAME[0]}: deleting service $1 with id $id"
+  log "deleting service $1 with id $id"
   rancher rm --stop $id
 }
 
 # Start a complex service, i.e. with yaml file customizations
 # Usage example: start_complex_service grafana 3000:3000 1
 function start_complex_service() {
-  echo "${FUNCNAME[0]}: starting service $1 at ports $2, and scale $3"
+  log "starting service $1 at ports $2, and scale $3"
   service=$1
   # port is either a single (unexposed) port, or an source:target pair (source
   # is the external port)
   ports=$2
   scale=$3
 
-  echo "${FUNCNAME[0]}: creating service folder ~/rancher/$service"
+  log "creating service folder ~/rancher/$service"
   mkdir ~/rancher/$service
   cd  ~/rancher/$service
-  echo "${FUNCNAME[0]}: creating docker-compose.yml"
+  log "creating docker-compose.yml"
   # Define service via docker-compose.yml
   case "$service" in
     grafana)
@@ -414,7 +420,7 @@ EOF
     *)
   esac
 
-  echo "${FUNCNAME[0]}: starting service $service"
+  log "starting service $service"
   rancher up -s $service -d
 
   wait_till_healthy "$service/$service" 6
@@ -455,7 +461,7 @@ function demo() {
   end=`date +%s`
   runtime=$((end-start))
   runtime=$((runtime/60))
-  echo "${FUNCNAME[0]}: Demo duration = $runtime minutes"
+  log "Demo duration = $runtime minutes"
 }
 
 # Automate the installation

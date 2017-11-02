@@ -40,6 +40,12 @@
 # https://github.com/prometheus/haproxy_exporter
 # https://github.com/prometheus/collectd_exporter
 
+function log() {
+  f=$(caller 0 | awk '{print $2}')
+  l=$(caller 0 | awk '{print $1}')
+  echo "$f:$l ($(date)) $1"
+}
+
 # Use this to trigger fail() at the right places
 # if [ "$RESULT" == "Test Failed!" ]; then fail "message"; fi
 function fail() {
@@ -49,11 +55,11 @@ function fail() {
 
 function setup_prometheus() {
   # Prerequisites
-  echo "${FUNCNAME[0]}: Setting up prometheus master and agents"
+  log "Setting up prometheus master and agents"
   sudo apt install -y golang-go jq
 
   # Install Prometheus server
-  echo "${FUNCNAME[0]}: Setting up prometheus master"
+  log "Setting up prometheus master"
   if [[ -d ~/prometheus ]]; then rm -rf ~/prometheus; fi
   mkdir ~/prometheus
   cd  ~/prometheus
@@ -92,7 +98,7 @@ EOF
   nohup ./prometheus --config.file=prometheus.yml > /dev/null 2>&1 &
   # Browse to http://host_ip:9090
 
-  echo "${FUNCNAME[0]}: Installing exporters"
+  log "Installing exporters"
   # Install exporters
   # https://github.com/prometheus/node_exporter
   cd ~/prometheus
@@ -104,7 +110,7 @@ EOF
 
   # The scp and ssh actions below assume you have key-based access enabled to the nodes
   for node in $nodes; do
-    echo "${FUNCNAME[0]}: Setup agent at $node"
+    log "Setup agent at $node"
     scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
       node_exporter-0.14.0.linux-amd64/node_exporter ubuntu@$node:/home/ubuntu/node_exporter
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
@@ -117,33 +123,33 @@ EOF
 
   host_ip=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
   while ! curl -o /tmp/up http://$host_ip:9090/api/v1/query?query=up ; do
-    echo "${FUNCNAME[0]}: Prometheus API is not yet responding... waiting 10 seconds"
+    log "Prometheus API is not yet responding... waiting 10 seconds"
     sleep 10
   done
 
   exp=$(jq '.data.result|length' /tmp/up)
-  echo "${FUNCNAME[0]}: $exp exporters are up"
+  log "$exp exporters are up"
   while [[ $exp > 0 ]]; do
     ((exp--))
     eip=$(jq -r ".data.result[$exp].metric.instance" /tmp/up)
     job=$(jq -r ".data.result[$exp].metric.job" /tmp/up)
-    echo "${FUNCNAME[0]}: $job at $eip"
+    log "$job at $eip"
   done
-  echo "${FUNCNAME[0]}: Prometheus dashboard is available at http://$host_ip:9090"
+  log "Prometheus dashboard is available at http://$host_ip:9090"
   echo "Prometheus dashboard is available at http://$host_ip:9090" >>/tmp/summary
 }
 
 function connect_grafana() {
-  echo "${FUNCNAME[0]}: Setup Grafana datasources and dashboards"
+  log "Setup Grafana datasources and dashboards"
   prometheus_ip=$1
   grafana_ip=$2
 
   while ! curl -X POST http://admin:admin@$grafana_ip:3000/api/login/ping ; do
-    echo "${FUNCNAME[0]}: Grafana API is not yet responding... waiting 10 seconds"
+    log "Grafana API is not yet responding... waiting 10 seconds"
     sleep 10
   done
 
-  echo "${FUNCNAME[0]}: Setup Prometheus datasource for Grafana"
+  log "Setup Prometheus datasource for Grafana"
   cd ~/prometheus/
   cat >datasources.json <<EOF
 {"name":"Prometheus", "type":"prometheus", "access":"proxy", \
@@ -157,9 +163,9 @@ EOF
   if [[ "$(jq -r '.message' /tmp/json)" != "Datasource added" ]]; then
     fail "Datasource creation failed"
   fi
-  echo "${FUNCNAME[0]}: Prometheus datasource for Grafana added"
+  log "Prometheus datasource for Grafana added"
 
-  echo "${FUNCNAME[0]}: Import Grafana dashboards"
+  log "Import Grafana dashboards"
   # Setup Prometheus dashboards
   # https://grafana.com/dashboards?dataSource=prometheus
   # To add additional dashboards, browse the URL above and import the dashboard via the id displayed for the dashboard
@@ -170,9 +176,9 @@ EOF
   for board in $boards; do
     curl -X POST -u admin:admin -H "Accept: application/json" -H "Content-type: application/json" -d @${board} http://$grafana_ip:3000/api/dashboards/db
   done
-  echo "${FUNCNAME[0]}: Grafana dashboards are available at http://$host_ip:3000 (login as admin/admin)"
+  log "Grafana dashboards are available at http://$host_ip:3000 (login as admin/admin)"
   echo "Grafana dashboards are available at http://$host_ip:3000 (login as admin/admin)" >>/tmp/summary
-  echo "${FUNCNAME[0]}: Grafana API is available at http://admin:admin@$host_ip:3000/api/v1/query?query=<string>"
+  log "Grafana API is available at http://admin:admin@$host_ip:3000/api/v1/query?query=<string>"
   echo "Grafana API is available at http://admin:admin@$host_ip:3000/api/v1/query?query=<string>" >>/tmp/summary
 }
 
@@ -182,14 +188,14 @@ function run_and_connect_grafana() {
   sudo docker run -d -p 3000:3000 --name grafana grafana/grafana
   status=$(sudo docker inspect grafana | jq -r '.[0].State.Status')
   while [[ "x$status" != "xrunning" ]]; do
-    echo "${FUNCNAME[0]}: Grafana container state is ($status)"
+    log "Grafana container state is ($status)"
     sleep 10
     status=$(sudo docker inspect grafana | jq -r '.[0].State.Status')
   done
-  echo "${FUNCNAME[0]}: Grafana container state is $status"
+  log "Grafana container state is $status"
 
   connect_grafana $host_ip $host_ip
-  echo "${FUNCNAME[0]}: connect_grafana complete"
+  log "connect_grafana complete"
 }
 
 nodes=$2

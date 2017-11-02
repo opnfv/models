@@ -37,6 +37,12 @@
 #.   By default, cleans the entire cluster.
 #.
 
+function log() {
+  f=$(caller 0 | awk '{print $2}')
+  l=$(caller 0 | awk '{print $1}')
+  echo "$f:$l ($(date)) $1"
+}
+
 # Setup master and worker hosts
 function setup() {
   # Per https://docs.docker.com/engine/swarm/swarm-tutorial/
@@ -83,27 +89,27 @@ sudo docker swarm init --advertise-addr $master
 EOF
 
   if ! curl http://$master:4243/version ; then
-    echo "${FUNCNAME[0]}: docker API failed to initialize"
+    log "docker API failed to initialize"
     exit 1
   fi
 
   # Per https://docs.docker.com/engine/swarm/swarm-tutorial/add-nodes/
   token=$(ssh -o StrictHostKeyChecking=no -x ubuntu@$master sudo docker swarm join-token worker | grep docker)
   for worker in $workers; do
-    echo "${FUNCNAME[0]}: setting up worker at $worker"
+    log "setting up worker at $worker"
     scp -o StrictHostKeyChecking=no /tmp/prereqs.sh ubuntu@$worker:/home/ubuntu/.
     ssh -x -o StrictHostKeyChecking=no ubuntu@$worker bash /home/ubuntu/prereqs.sh
     ssh -x -o StrictHostKeyChecking=no ubuntu@$worker sudo $token
   done
 
-  echo "${FUNCNAME[0]}: testing service creation"
+  log "testing service creation"
   reps=1; for a in $workers; do ((reps++)); done
   create_service nginx $reps
 }
 
 
 function create_service() {
-  echo "${FUNCNAME[0]}: creating service $1 with $2 replicas"
+  log "creating service $1 with $2 replicas"
   # sudo docker service create -p 80:80 --replicas $reps --name nginx nginx
   # per https://docs.docker.com/engine/api/v1.27/
   source /tmp/env.sh
@@ -112,11 +118,11 @@ function create_service() {
       match="Welcome to nginx!"
       ;;
     *)
-      echo "${FUNCNAME[0]}: service $1 not setup for use with this script"
+      log "service $1 not setup for use with this script"
   esac
 
   if ! curl -X POST http://$master:4243/services/create -d @$1.json ; then
-    echo "${FUNCNAME[0]}: service creation failed"
+    log "service creation failed"
     exit 1
   fi
 
@@ -124,7 +130,7 @@ function create_service() {
 }
 
 function check_service() {
-  echo "${FUNCNAME[0]}: checking service state for $1 with match string $2"
+  log "checking service state for $1 with match string $2"
   source /tmp/env.sh
   service=$1
   match="$2"
@@ -139,7 +145,7 @@ function check_service() {
       for node in $nodes; do
         not=""
         while ! curl -s -o /tmp/resp http://$node:$port ; do
-          echo "${FUNCNAME[0]}: service is not yet active, waiting 10 seconds"
+          log "service is not yet active, waiting 10 seconds"
           sleep 10
         done
         curl -s -o /tmp/resp http://$node:$port
@@ -155,7 +161,7 @@ function check_service() {
 }
 
 function delete_service() {
-  echo "${FUNCNAME[0]}: deleting service $1"
+  log "deleting service $1"
   source /tmp/env.sh
   service=$1
   services=$(curl http://$master:4243/services)
@@ -165,9 +171,9 @@ function delete_service() {
     if [[ $(echo $services | jq -r ".[$n].Spec.Name") == $service ]]; then
       id=$(echo $services | jq -r ".[$n].ID")
       if ! curl -X DELETE http://$master:4243/services/$id ; then
-        echo "${FUNCNAME[0]}: failed to delete service $1"
+        log "failed to delete service $1"
       else
-        echo "${FUNCNAME[0]}: deleted service $1"
+        log "deleted service $1"
       fi
       break
     fi
@@ -205,7 +211,7 @@ case "$1" in
     end=`date +%s`
     runtime=$((end-start))
     runtime=$((runtime/60))
-    echo "${FUNCNAME[0]}: Demo duration = $runtime minutes"
+    log "Demo duration = $runtime minutes"
     ;;
   create)
     create_service "$2" $3

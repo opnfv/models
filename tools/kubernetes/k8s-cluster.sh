@@ -44,8 +44,14 @@
 #. Status: work in progress, incomplete
 #
 
+function log() {
+  f=$(caller 0 | awk '{print $2}')
+  l=$(caller 0 | awk '{print $1}')
+  echo "$f:$l ($(date)) $1"
+}
+
 function setup_prereqs() {
-  echo "${FUNCNAME[0]}: Create prerequisite setup script"
+  log "Create prerequisite setup script"
   cat <<'EOG' >/tmp/prereqs.sh
 #!/bin/bash
 # Basic server pre-reqs
@@ -70,15 +76,14 @@ EOF
 sudo apt-get update
 # Next command is to workaround bug resulting in "PersistentVolumeClaim is not bound" for pod startup (remain in Pending)
 # TODO: reverify if this is still an issue in the final working script
-sudo apt-get -y install ceph ceph-common
 sudo apt-get -y install --allow-downgrades kubectl=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00
-# Needed for ceph setup etc
+# Needed for API output parsing
 sudo apt-get -y install jq
 EOG
 }
 
 function setup_k8s_master() {
-  echo "${FUNCNAME[0]}: Setting up kubernetes master"
+  log "Setting up kubernetes master"
   setup_prereqs
 
   # Install master
@@ -89,35 +94,35 @@ function setup_k8s_master() {
   sudo kubeadm init --pod-network-cidr=192.168.0.0/16 >>/tmp/kubeadm.out
   cat /tmp/kubeadm.out
   export k8s_joincmd=$(grep "kubeadm join" /tmp/kubeadm.out)
-  echo "${FUNCNAME[0]}: Cluster join command for manual use if needed: $k8s_joincmd"
+  log "Cluster join command for manual use if needed: $k8s_joincmd"
 
   # Start cluster
-  echo "${FUNCNAME[0]}: Start the cluster"
+  log "Start the cluster"
   mkdir -p $HOME/.kube
   sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
   sudo chown $(id -u):$(id -g) $HOME/.kube/config
   # Deploy pod network
-  echo "${FUNCNAME[0]}: Deploy calico as CNI"
+  log "Deploy calico as CNI"
   sudo kubectl apply -f http://docs.projectcalico.org/v2.4/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
 }
 
 function setup_k8s_agents() {
   agents="$1"
   export k8s_joincmd=$(grep "kubeadm join" /tmp/kubeadm.out)
-  echo "${FUNCNAME[0]}: Installing agents at $1 with joincmd: $k8s_joincmd"
+  log "Installing agents at $1 with joincmd: $k8s_joincmd"
 
   setup_prereqs
 
   kubedns=$(kubectl get pods --all-namespaces | grep kube-dns | awk '{print $4}')
   while [[ "$kubedns" != "Running" ]]; do
-    echo "${FUNCNAME[0]}: kube-dns status is $kubedns. Waiting 60 seconds for it to be 'Running'"
+    log "kube-dns status is $kubedns. Waiting 60 seconds for it to be 'Running'"
     sleep 60
     kubedns=$(kubectl get pods --all-namespaces | grep kube-dns | awk '{print $4}')
   done
-  echo "${FUNCNAME[0]}: kube-dns status is $kubedns"
+  log "kube-dns status is $kubedns"
 
   for agent in $agents; do
-    echo "${FUNCNAME[0]}: Install agent at $agent"
+    log "Install agent at $agent"
     scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/prereqs.sh ubuntu@$agent:/tmp/prereqs.sh
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$agent bash /tmp/prereqs.sh agent
     # Workaround for "[preflight] Some fatal errors occurred: /var/lib/kubelet is not empty" per https://github.com/kubernetes/kubeadm/issues/1
@@ -125,30 +130,30 @@ function setup_k8s_agents() {
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$agent sudo $k8s_joincmd
   done
 
-  echo "${FUNCNAME[0]}: Cluster is ready when all nodes in the output of 'kubectl get nodes' show as 'Ready'."
+  log "Cluster is ready when all nodes in the output of 'kubectl get nodes' show as 'Ready'."
 }
 
 function wait_for_service() {
-  echo "${FUNCNAME[0]}: Waiting for service $1 to be available"
+  log "Waiting for service $1 to be available"
   pod=$(kubectl get pods --namespace default | awk "/$1/ { print \$1 }")
-  echo "${FUNCNAME[0]}: Service $1 is at pod $pod"
+  log "Service $1 is at pod $pod"
   ready=$(kubectl get pods --namespace default -o jsonpath='{.status.containerStatuses[0].ready}' $pod)
   while [[ "$ready" != "true" ]]; do
-    echo "${FUNCNAME[0]}: $1 container is not yet ready... waiting 10 seconds"
+    log "$1 container is not yet ready... waiting 10 seconds"
     sleep 10
     # TODO: figure out why transient pods sometimes mess up this logic, thus need to re-get the pods
     pod=$(kubectl get pods --namespace default | awk "/$1/ { print \$1 }")
     ready=$(kubectl get pods --namespace default -o jsonpath='{.status.containerStatuses[0].ready}' $pod)
   done
-  echo "${FUNCNAME[0]}: pod $pod container status is $ready"
+  log "pod $pod container status is $ready"
   host_ip=$(kubectl get pods --namespace default -o jsonpath='{.status.hostIP}' $pod)
   port=$(kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services $1)
-  echo "${FUNCNAME[0]}: pod $pod container is at host $host_ip and port $port"
+  log "pod $pod container is at host $host_ip and port $port"
   while ! curl http://$host_ip:$port ; do
-    echo "${FUNCNAME[0]}: $1 service is not yet responding... waiting 10 seconds"
+    log "$1 service is not yet responding... waiting 10 seconds"
     sleep 10
   done
-  echo "${FUNCNAME[0]}: $1 is available at http://$host_ip:$port"
+  log "$1 is available at http://$host_ip:$port"
 }
 
 function demo_chart() {
@@ -211,7 +216,7 @@ function demo_chart() {
       wait_for_service oc-owncloud
       ;;
     *)
-      echo "${FUNCNAME[0]}: demo not implemented for $1"
+      log "demo not implemented for $1"
   esac
 # extra useful commands
 # kubectl describe pvc
@@ -225,7 +230,7 @@ function demo_chart() {
 }
 
 function setup_helm() {
-  echo "${FUNCNAME[0]}: Setup helm"
+  log "Setup helm"
   # Install Helm
   cd ~
   curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get > get_helm.sh
@@ -242,11 +247,11 @@ function setup_helm() {
   # Wait till tiller is running
   tiller_deploy=$(kubectl get pods --all-namespaces | grep tiller-deploy | awk '{print $4}')
   while [[ "$tiller_deploy" != "Running" ]]; do
-    echo "${FUNCNAME[0]}: tiller-deploy status is $tiller_deploy. Waiting 60 seconds for it to be 'Running'"
+    log "tiller-deploy status is $tiller_deploy. Waiting 60 seconds for it to be 'Running'"
     sleep 60
     tiller_deploy=$(kubectl get pods --all-namespaces | grep tiller-deploy | awk '{print $4}')
   done
-  echo "${FUNCNAME[0]}: tiller-deploy status is $tiller_deploy"
+  log "tiller-deploy status is $tiller_deploy"
 
   # Install services via helm charts from https://kubeapps.com/charts
   # e.g. helm install stable/dokuwiki

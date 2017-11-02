@@ -32,7 +32,9 @@
 #
 
 function log() {
-  echo "${FUNCNAME[0]} $(date): $1"
+  f=$(caller 0 | awk '{print $2}')
+  l=$(caller 0 | awk '{print $1}')
+  echo "$f:$l ($(date)) $1"
 }
 
 function setup_ceph() {
@@ -40,6 +42,10 @@ function setup_ceph() {
   private_net=$2
   public_net=$3
   dev=$4
+	
+  log "Install ceph prerequisites"
+	sudo apt-get -y install ceph ceph-common
+
   # per https://github.com/att/netarbiter/tree/master/sds/ceph-docker/examples/helm
   log "Clone netarbiter"
   git clone https://github.com/att/netarbiter.git
@@ -94,7 +100,7 @@ nameserver $kubedns
 search ceph.svc.cluster.local svc.cluster.local cluster.local
 options ndots:5
 EOF
-sudo apt install -y ceph
+sudo apt install -y ceph ceph-common
 sudo ceph-disk zap /dev/$dev
 EOG
     log "Run ceph-osd at $node"
@@ -144,14 +150,8 @@ EOG
   log "pvc ceph-test successfully bound to $(kubectl get pvc -o jsonpath='{.spec.volumeName}' ceph-test)"
   kubectl describe pvc
 
-  log "Attach the pvc to a job and check if the job is successful (i.e., 1)"
+  log "Attach the pvc to a job"
   kubectl create -f tests/ceph/job.yaml
-  status=$(kubectl get jobs ceph-test-job -n default -o json | jq -r '.status.succeeded')
-  if [[ "$status" != "1" ]]; then
-    log "pvc attachment was not successful:"
-    kubectl get jobs ceph-test-job -n default -o json
-    exit 1
-  fi
 
   log "Verify that the test job was successful"
   pod=$(kubectl get pods --namespace default | awk "/ceph-test/{print \$1}")

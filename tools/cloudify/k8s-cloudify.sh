@@ -26,22 +26,28 @@
 #.   $ ssh -x ubuntu@<k8s-master> bash cloudify/k8s-cloudify.sh [setup|clean]
 #. Status: this is a work in progress, under test.
 
+function log() {
+  f=$(caller 0 | awk '{print $2}')
+  l=$(caller 0 | awk '{print $1}')
+  echo "$f:$l ($(date)) $1"
+}
+
 function prereqs() {
-  echo "${FUNCNAME[0]}: Install prerequisites"
+  log "Install prerequisites"
   sudo apt-get install -y virtinst qemu-kvm libguestfs-tools virtualenv git python-pip
-  echo "${FUNCNAME[0]}: Setup $USER for kvm use"
+  log "Setup $USER for kvm use"
   # Per http://libguestfs.org/guestfs-faq.1.html
   # workaround for virt-customize warning: libguestfs: warning: current user is not a member of the KVM group (group ID 121). This user cannot access /dev/kvm, so libguestfs may run very slowly. It is recommended that you 'chmod 0666 /dev/kvm' or add the current user to the KVM group (you might need to log out and log in again).
   # Also see: https://help.ubuntu.com/community/KVM/Installation
   # also to avoid permission denied errors in guestfish, from http://manpages.ubuntu.com/manpages/zesty/man1/guestfs-faq.1.html
   sudo usermod -a -G kvm $USER
   sudo chmod 0644 /boot/vmlinuz*
-  echo "${FUNCNAME[0]}: Clone repo"
+  log "Clone repo"
 }
 
 function setup () {
   cd ~/cloudify
-  echo "${FUNCNAME[0]}: Setup Cloudify-CLI"
+  log "Setup Cloudify-CLI"
   # Per http://docs.getcloudify.org/4.1.0/installation/bootstrapping/#installing-cloudify-manager-in-an-offline-environment
   wget -q http://repository.cloudifysource.org/cloudify/17.9.21/community-release/cloudify-cli-community-17.9.21.deb
   # Installs into /opt/cfy/
@@ -50,7 +56,7 @@ function setup () {
   virtualenv ~/cloudify/env
   source ~/cloudify/env/bin/activate
 
-  echo "${FUNCNAME[0]}: Setup Cloudify-Manager"
+  log "Setup Cloudify-Manager"
   # to start over
   # sudo virsh destroy cloudify-manager; sudo virsh undefine cloudify-manager
   wget -q http://repository.cloudifysource.org/cloudify/17.9.21/community-release/cloudify-manager-community-17.9.21.qcow2
@@ -60,20 +66,20 @@ function setup () {
   VM_IP=""
   n=0
   while [[ "x$VM_IP" == "x" ]]; do
-    echo "${FUNCNAME[0]}: $n minutes so far; waiting 60 seconds for cloudify-manager IP to be assigned"
+    log "$n minutes so far; waiting 60 seconds for cloudify-manager IP to be assigned"
     sleep 60
     ((n++))
     VM_MAC=$(virsh domiflist cloudify-manager | grep default | grep -Eo "[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+")
     VM_IP=$(/usr/sbin/arp -e | grep ${VM_MAC} | awk {'print $1'})
   done
-  echo "${FUNCNAME[0]}: cloudify-manager IP=$VM_IP"
+  log "cloudify-manager IP=$VM_IP"
   while ! cfy profiles use $VM_IP -u admin -p admin -t default_tenant ; do
-    echo "${FUNCNAME[0]}: waiting 60 seconds for cloudify-manager API to be active"
+    log "waiting 60 seconds for cloudify-manager API to be active"
     sleep 60
   done
   cfy status
 
-  echo "${FUNCNAME[0]}: Install Cloudify Kubernetes Plugin"
+  log "Install Cloudify Kubernetes Plugin"
   # Per http://docs.getcloudify.org/4.1.0/plugins/container-support/
   # Per https://github.com/cloudify-incubator/cloudify-kubernetes-plugin
   pip install kubernetes wagon
@@ -84,7 +90,7 @@ function setup () {
   # For Cloudify-Manager per https://github.com/cloudify-incubator/cloudify-kubernetes-plugin/blob/master/examples/persistent-volumes-blueprint.yaml
   cfy plugins upload cloudify_kubernetes_plugin-1.2.1-py27-none-linux_x86_64-centos-Core.wgn
 
-  echo "${FUNCNAME[0]}: Create secrets for kubernetes as referenced in blueprints"
+  log "Create secrets for kubernetes as referenced in blueprints"
   cfy secrets create -s $(grep server ~/.kube/config | awk -F '/' '{print $3}' | awk -F ':' '{print $1}') kubernetes_master_ip
   cfy secrets create -s $(grep server ~/.kube/config | awk -F '/' '{print $3}' | awk -F ':' '{print $2}') kubernetes_master_port
   cfy secrets create -s $(grep 'certificate-authority-data: ' ~/.kube/config | awk -F ' ' '{print $2}') kubernetes_certificate_authority_data
@@ -92,8 +98,8 @@ function setup () {
   cfy secrets create -s $(grep 'client-key-data: ' ~/.kube/config | awk -F ' ' '{print $2}') kubernetes-admin_client_key_data
   cfy secrets list
 
-  echo "${FUNCNAME[0]}: Cloudify CLI config is at ~/.cloudify/config.yaml"
-  echo "${FUNCNAME[0]}: Cloudify CLI log is at ~/.cloudify/logs/cli.log"
+  log "Cloudify CLI config is at ~/.cloudify/config.yaml"
+  log "Cloudify CLI log is at ~/.cloudify/logs/cli.log"
 }
 
 function demo() {
@@ -113,20 +119,20 @@ function demo() {
   cfy executions start install -d k8s-hello-world
   pod_ip=$(kubectl get pods --namespace default -o jsonpath='{.status.podIP}' nginx)
   while [[ "x$pod_ip" == "x" ]]; do
-    echo "${FUNCNAME[0]}: nginx pod IP is not yet assigned, waiting 10 seconds"
+    log "nginx pod IP is not yet assigned, waiting 10 seconds"
     sleep 10
     pod_ip=$(kubectl get pods --namespace default -o jsonpath='{.status.podIP}' nginx)
   done
   while ! curl http://$pod_ip ; do
-    echo "${FUNCNAME[0]}: nginx pod is not yet responding at http://$pod_ip, waiting 10 seconds"
+    log "nginx pod is not yet responding at http://$pod_ip, waiting 10 seconds"
     sleep 10
   done
-  echo "${FUNCNAME[0]}: nginx pod is active at http://$pod_ip"
+  log "nginx pod is active at http://$pod_ip"
   curl http://$pod_ip
 }
 
 function clean () {
-  echo "${FUNCNAME[0]}: Cleanup cloudify"
+  log "Cleanup cloudify"
   # TODO
 }
 
