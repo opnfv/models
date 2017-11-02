@@ -93,8 +93,7 @@ EOF
 
   for node in $nodes; do
     log "install ceph, setup resolv.conf, zap disk for $node"
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$node <<EOG
+    ssh -x -o StrictHostKeyChecking=no ubuntu@$node <<EOG
 cat <<EOF | sudo tee /etc/resolv.conf
 nameserver $kubedns
 search ceph.svc.cluster.local svc.cluster.local cluster.local
@@ -104,14 +103,12 @@ sudo apt install -y ceph ceph-common
 sudo ceph-disk zap /dev/$dev
 EOG
     log "Run ceph-osd at $node"
-    name=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$node hostname)
+    name=$(ssh -x -o StrictHostKeyChecking=no ubuntu@$node hostname)
     ./helm-install-ceph-osd.sh $name /dev/$dev
   done
 
   for node in $nodes; do
-    name=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$node hostname)
+    name=$(ssh -x -o StrictHostKeyChecking=no ubuntu@$node hostname)
     pod=$(kubectl get pods --namespace ceph | awk "/$name/{print \$1}")
     log "verify ceph-osd is Running at node $name"
     status=$(kubectl get pods --namespace ceph $pod | awk "/$pod/ {print \$3}")
