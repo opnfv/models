@@ -51,7 +51,7 @@ function setup_ceph() {
   # Note this loop may be partially redundant with the ceph-deploy steps below
   for node_ip in $all_nodes; do
     log "Install ntp and ceph on $node_ip"
-    ssh -x -o StrictHostKeyChecking=no ubuntu@$node_ip <<EOF
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$node_ip <<EOF
 sudo timedatectl set-ntp no
 wget -q -O- 'https://download.ceph.com/keys/release.asc' | sudo apt-key add -
 echo deb https://download.ceph.com/debian/ $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list
@@ -87,7 +87,7 @@ EOF
       log "Prepare ceph OSD on node $node_ip"
       echo "$node_ip ceph-osd$n" | sudo tee -a /etc/hosts
       # Using ceph-osd$n here avoids need for manual acceptance of the new server hash
-      ssh -x -o StrictHostKeyChecking=no ubuntu@ceph-osd$n <<EOF
+      ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@ceph-osd$n <<EOF
 echo "$node_ip ceph-osd$n" | sudo tee -a /etc/hosts
 sudo mkdir /ceph && sudo chown -R ceph:ceph /ceph
 EOF

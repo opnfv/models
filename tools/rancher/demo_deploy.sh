@@ -49,7 +49,7 @@ scp -o StrictHostKeyChecking=no $key ubuntu@$master:/home/ubuntu/$key
 scp -o StrictHostKeyChecking=no ~/models/tools/rancher/rancher-cluster.sh \
   ubuntu@$master:/home/ubuntu/.
 echo "Setting up Rancher..."
-ssh -x -o StrictHostKeyChecking=no ubuntu@$master <<EOF
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master <<EOF
 exec ssh-agent bash
 ssh-add $key
 bash rancher-cluster.sh all "$workers"
@@ -58,11 +58,11 @@ EOF
 # causes the ssh session to end before the prometheus setup, if both scripts
 # are in the same ssh session
 echo "Setting up Prometheus..."
-ssh -x -o StrictHostKeyChecking=no ubuntu@$master mkdir -p \
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master mkdir -p \
   /home/ubuntu/models/tools/prometheus
 scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
   ubuntu@$master:/home/ubuntu/models/tools/prometheus
-ssh -x -o StrictHostKeyChecking=no ubuntu@$master <<EOF
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master <<EOF
 exec ssh-agent bash
 ssh-add $key
 cd models/tools/prometheus

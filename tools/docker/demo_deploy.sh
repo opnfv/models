@@ -50,11 +50,11 @@ bash ~/models/tools/docker/docker-cluster.sh all $master "$workers"
 # causes the ssh session to end before the prometheus setup, if both scripts
 # are in the same ssh session
 echo "Setting up Prometheus..."
-ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip mkdir -p \
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$admin_ip mkdir -p \
   /home/ubuntu/models/tools/prometheus
 scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
   ubuntu@$admin_ip:/home/ubuntu/models/tools/prometheus
-ssh -x -o StrictHostKeyChecking=no ubuntu@$admin_ip <<EOF
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$admin_ip <<EOF
 exec ssh-agent bash
 ssh-add $key
 cd models/tools/prometheus

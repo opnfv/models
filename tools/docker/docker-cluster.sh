@@ -76,10 +76,10 @@ EOF
   # jq is used for parsing API reponses
   sudo apt-get install -y jq
   scp -o StrictHostKeyChecking=no /tmp/prereqs.sh ubuntu@$master:/home/ubuntu/prereqs.sh
-  ssh -x -o StrictHostKeyChecking=no ubuntu@$master bash /home/ubuntu/prereqs.sh
+  ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master bash /home/ubuntu/prereqs.sh
   # activate docker API
   # Per https://www.ivankrizsan.se/2016/05/18/enabling-docker-remote-api-on-ubuntu-16-04/
-  ssh -x -o StrictHostKeyChecking=no ubuntu@$master <<EOF
+  ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master <<EOF
 sudo sed -i -- 's~fd://~fd:// -H tcp://0.0.0.0:4243~' /lib/systemd/system/docker.service
 sudo systemctl daemon-reload
 sudo service docker restart
@@ -98,8 +98,8 @@ EOF
   for worker in $workers; do
     log "setting up worker at $worker"
     scp -o StrictHostKeyChecking=no /tmp/prereqs.sh ubuntu@$worker:/home/ubuntu/.
-    ssh -x -o StrictHostKeyChecking=no ubuntu@$worker bash /home/ubuntu/prereqs.sh
-    ssh -x -o StrictHostKeyChecking=no ubuntu@$worker sudo $token
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$worker bash /home/ubuntu/prereqs.sh
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$worker sudo $token
   done
 
   log "testing service creation"

@@ -59,7 +59,7 @@ scp -o StrictHostKeyChecking=no $key ubuntu@$master:/home/ubuntu/$key
 echo "$0 $(date): Setting up kubernetes..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/kubernetes/* \
   ubuntu@$master:/home/ubuntu/.
-ssh -x -o StrictHostKeyChecking=no ubuntu@$master <<EOF
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master <<EOF
 exec ssh-agent bash
 ssh-add $key
 bash k8s-cluster.sh all "$workers" $priv_net $pub_net $ceph_mode $ceph_dev
@@ -68,11 +68,11 @@ EOF
 # causes the ssh session to end before the prometheus setup, if both scripts
 # are in the same ssh session
 echo "Setting up Prometheus..."
-ssh -x -o StrictHostKeyChecking=no ubuntu@$master mkdir -p \
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master mkdir -p \
   /home/ubuntu/models/tools/prometheus
 scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
   ubuntu@$master:/home/ubuntu/models/tools/prometheus
-ssh -x -o StrictHostKeyChecking=no ubuntu@$master <<EOF
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master <<EOF
 exec ssh-agent bash
 ssh-add $key
 cd models/tools/prometheus
@@ -81,16 +81,16 @@ EOF
 echo "$0 $(date): Setting up cloudify..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/cloudify \
   ubuntu@$master:/home/ubuntu/.
-ssh -x -o StrictHostKeyChecking=no ubuntu@$master \
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master \
   bash cloudify/k8s-cloudify.sh prereqs
-ssh -x -o StrictHostKeyChecking=no ubuntu@$master \
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master \
   bash cloudify/k8s-cloudify.sh setup
-ssh -x -o StrictHostKeyChecking=no ubuntu@$master \
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master \
   bash cloudify/k8s-cloudify.sh demo
 
 echo "$0 $(date): All done!"
-export NODE_PORT=$(ssh -x -o StrictHostKeyChecking=no ubuntu@$master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
-export NODE_IP=$(ssh -x -o StrictHostKeyChecking=no ubuntu@$master  kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
+export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
+export NODE_IP=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master  kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
 echo "Helm chart demo app dokuwiki is available at http://$NODE_IP:$NODE_PORT/"
 # TODO update Cloudify demo app to have public exposed service address
 echo "Cloudify-deployed demo app nginx is available at TBD"
