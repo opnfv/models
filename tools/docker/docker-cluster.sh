@@ -75,7 +75,7 @@ EOF
 
   # jq is used for parsing API reponses
   sudo apt-get install -y jq
-  scp -o StrictHostKeyChecking=no /tmp/prereqs.sh ubuntu@$master:/home/ubuntu/prereqs.sh
+  scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/prereqs.sh ubuntu@$master:/home/ubuntu/prereqs.sh
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master bash /home/ubuntu/prereqs.sh
   # activate docker API
   # Per https://www.ivankrizsan.se/2016/05/18/enabling-docker-remote-api-on-ubuntu-16-04/
@@ -97,7 +97,7 @@ EOF
   token=$(ssh -o StrictHostKeyChecking=no -x ubuntu@$master sudo docker swarm join-token worker | grep docker)
   for worker in $workers; do
     log "setting up worker at $worker"
-    scp -o StrictHostKeyChecking=no /tmp/prereqs.sh ubuntu@$worker:/home/ubuntu/.
+    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/prereqs.sh ubuntu@$worker:/home/ubuntu/.
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$worker bash /home/ubuntu/prereqs.sh
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$worker sudo $token
   done

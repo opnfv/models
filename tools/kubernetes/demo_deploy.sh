@@ -55,7 +55,7 @@ source ~/models/tools/maas/deploy.sh $1 "$2" $9
 eval `ssh-agent`
 ssh-add $key
 if [[ "x$extras" != "x" ]]; then source $extras; fi
-scp -o StrictHostKeyChecking=no $key ubuntu@$master:/home/ubuntu/$key
+scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $key ubuntu@$master:/home/ubuntu/$key
 echo "$0 $(date): Setting up kubernetes..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/kubernetes/* \
   ubuntu@$master:/home/ubuntu/.

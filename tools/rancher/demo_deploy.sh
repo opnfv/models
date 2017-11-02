@@ -45,8 +45,8 @@ source ~/models/tools/maas/deploy.sh $1 "$2" $5
 eval `ssh-agent`
 ssh-add $key
 if [[ "x$extras" != "x" ]]; then source $extras; fi
-scp -o StrictHostKeyChecking=no $key ubuntu@$master:/home/ubuntu/$key
-scp -o StrictHostKeyChecking=no ~/models/tools/rancher/rancher-cluster.sh \
+scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $key ubuntu@$master:/home/ubuntu/$key
+scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ~/models/tools/rancher/rancher-cluster.sh \
   ubuntu@$master:/home/ubuntu/.
 echo "Setting up Rancher..."
 ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master <<EOF
