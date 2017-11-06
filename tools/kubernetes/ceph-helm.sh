@@ -134,6 +134,8 @@ EOG
   log "Create a pool from a ceph-mon pod (e.g., ceph-mon-0)"
 
   kubectl -n ceph exec -it ceph-mon-0 -- ceph osd pool create rbd 100 100
+	# TODO: Workaround for issue: "rbd: map failed exit status 110 rbd: sysfs write failed"
+	kubectl -n ceph exec -it ceph-mon-0 -- ceph osd crush tunables legacy
 
   log "Create a pvc and check if the pvc status is Bound"
 
@@ -152,12 +154,12 @@ EOG
 
   log "Verify that the test job was successful"
   pod=$(kubectl get pods --namespace default | awk "/ceph-test/{print \$1}")
-  active=$(kubectl get jobs --namespace default -o json ceph-test-job | jq -r '.status.active')
-  while [[ $active > 0 ]]; do
+  success=$(kubectl get jobs --namespace default -o json ceph-test-job | jq -r '.status.succeeded')
+  while [[ "$success" == "null" || "$success" == "0" ]]; do
     log "test job is still running, waiting 10 seconds for it to complete"
     kubectl describe pods --namespace default $pod | awk '/Events:/{y=1;next}y'
     sleep 10
-    active=$(kubectl get jobs --namespace default -o json ceph-test-job | jq -r '.status.active')
+    success=$(kubectl get jobs --namespace default -o json ceph-test-job | jq -r '.status.succeeded')
   done
   log "test job succeeded"
 
