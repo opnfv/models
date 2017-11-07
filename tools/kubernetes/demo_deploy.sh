@@ -85,8 +85,7 @@ ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$maste
   bash cloudify/k8s-cloudify.sh prereqs
 ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master \
   bash cloudify/k8s-cloudify.sh setup
-ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master \
-  bash cloudify/k8s-cloudify.sh demo
+source ~/models/tools/cloudify/k8s-cloudify.sh demo start $master
 
 echo "$0 $(date): All done!"
 export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
@@ -98,3 +97,4 @@ echo "Prometheus UI is available at http://$master:9090"
 echo "Grafana dashboards are available at http://$master:3000 (login as admin/admin)"
 echo "Grafana API is available at http://admin:admin@$master:3000/api/v1/query?query=<string>"
 echo "Kubernetes API is available at https://$master:6443/api/v1/"
+echo "Cloudify API access example: curl -u admin:admin --header 'Tenant: default_tenant' http://$master/api/v3.1/status"
