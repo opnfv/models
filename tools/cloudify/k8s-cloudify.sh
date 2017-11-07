@@ -23,18 +23,28 @@
 #.     <k8s-master>: IP or hostname of kubernetes master server
 #.   $ ssh -x ubuntu@<k8s-master> cloudify/k8s-cloudify.sh prereqs
 #.     prereqs: installs prerequisites and configures ubuntu user for kvm use
-#.   $ ssh -x ubuntu@<k8s-master> bash cloudify/k8s-cloudify.sh [setup|clean]
+#.   $ ssh -x ubuntu@<k8s-master> bash cloudify/k8s-cloudify.sh setup
+#.     setup: installs cloudify CLI and Manager
+#.   $ source ~/models/tools/cloudify/k8s-cloudify.sh demo <start|stop> <k8s-master>
+#.     demo: control demo blueprint
+#.     start|stop: start or stop the demo
+#.     <k8s-master>: IP or hostname of kubernetes master server
+#.   $ ssh -x ubuntu@<k8s-master> bash cloudify/k8s-cloudify.sh clean
+#.     clean: uninstalls cloudify CLI and Manager
+
 #. Status: this is a work in progress, under test.
 
 function log() {
   f=$(caller 0 | awk '{print $2}')
   l=$(caller 0 | awk '{print $1}')
+  echo ""
   echo "$f:$l ($(date)) $1"
 }
 
 function prereqs() {
   log "Install prerequisites"
-  sudo apt-get install -y virtinst qemu-kvm libguestfs-tools virtualenv git python-pip
+  sudo apt-get install -y virtinst qemu-kvm libguestfs-tools virtualenv git \
+    python-pip
   log "Setup $USER for kvm use"
   # Per http://libguestfs.org/guestfs-faq.1.html
   # workaround for virt-customize warning: libguestfs: warning: current user is not a member of the KVM group (group ID 121). This user cannot access /dev/kvm, so libguestfs may run very slowly. It is recommended that you 'chmod 0666 /dev/kvm' or add the current user to the KVM group (you might need to log out and log in again).
@@ -61,7 +71,11 @@ function setup () {
   # sudo virsh destroy cloudify-manager; sudo virsh undefine cloudify-manager
   wget -q http://repository.cloudifysource.org/cloudify/17.9.21/community-release/cloudify-manager-community-17.9.21.qcow2
   # nohup and redirection of output is a workaround for some issue with virt-install never outputting anything beyond "Creadint domain..." and thus not allowing the script to continue.
-  nohup virt-install --connect qemu:///system --virt-type kvm --name cloudify-manager --vcpus 4 --memory 16192 --disk cloudify-manager-community-17.9.21.qcow2 --import --network network=default --os-type=linux --os-variant=rhel7 > /dev/null 2>&1 &
+  nohup virt-install --connect qemu:///system --virt-type kvm \
+    --name cloudify-manager --vcpus 4 --memory 16192 \
+    --disk cloudify-manager-community-17.9.21.qcow2 --import \
+    --network network=default --os-type=linux  \
+    --os-variant=rhel7 > /dev/null 2>&1 &
 
   VM_IP=""
   n=0
@@ -86,20 +100,42 @@ function setup () {
   # From https://github.com/cloudify-incubator/cloudify-kubernetes-plugin/releases
   wget -q https://github.com/cloudify-incubator/cloudify-kubernetes-plugin/releases/download/1.2.1/cloudify_kubernetes_plugin-1.2.1-py27-none-linux_x86_64-centos-Core.wgn
   # For Cloudify-CLI per http://docs.getcloudify.org/4.1.0/plugins/using-plugins/
-  wagon install cloudify_kubernetes_plugin-1.2.1-py27-none-linux_x86_64-centos-Core.wgn
+  wagon install  \
+    cloudify_kubernetes_plugin-1.2.1-py27-none-linux_x86_64-centos-Core.wgn
   # For Cloudify-Manager per https://github.com/cloudify-incubator/cloudify-kubernetes-plugin/blob/master/examples/persistent-volumes-blueprint.yaml
   cfy plugins upload cloudify_kubernetes_plugin-1.2.1-py27-none-linux_x86_64-centos-Core.wgn
 
   log "Create secrets for kubernetes as referenced in blueprints"
-  cfy secrets create -s $(grep server ~/.kube/config | awk -F '/' '{print $3}' | awk -F ':' '{print $1}') kubernetes_master_ip
-  cfy secrets create -s $(grep server ~/.kube/config | awk -F '/' '{print $3}' | awk -F ':' '{print $2}') kubernetes_master_port
-  cfy secrets create -s $(grep 'certificate-authority-data: ' ~/.kube/config | awk -F ' ' '{print $2}') kubernetes_certificate_authority_data
-  cfy secrets create -s $(grep 'client-certificate-data: ' ~/.kube/config | awk -F ' ' '{print $2}') kubernetes-admin_client_certificate_data
-  cfy secrets create -s $(grep 'client-key-data: ' ~/.kube/config | awk -F ' ' '{print $2}') kubernetes-admin_client_key_data
+  cfy secrets create -s $(grep server ~/.kube/config | awk -F '/' '{print $3}' \
+    | awk -F ':' '{print $1}') kubernetes_master_ip
+  cfy secrets create -s $(grep server ~/.kube/config | awk -F '/' '{print $3}' \
+    | awk -F ':' '{print $2}') kubernetes_master_port
+  cfy secrets create -s  \
+    $(grep 'certificate-authority-data: ' ~/.kube/config |  \
+    awk -F ' ' '{print $2}') kubernetes_certificate_authority_data
+  cfy secrets create -s $(grep 'client-certificate-data: ' ~/.kube/config \
+    | awk -F ' ' '{print $2}') kubernetes-admin_client_certificate_data
+  cfy secrets create -s $(grep 'client-key-data: ' ~/.kube/config \
+    | awk -F ' ' '{print $2}') kubernetes-admin_client_key_data
   cfy secrets list
+
+  # get manager VM IP
+  VM_MAC=$(sudo virsh domiflist cloudify-manager | grep default | grep -Eo "[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+")
+  VM_IP=$(/usr/sbin/arp -e | grep ${VM_MAC} | awk {'print $1'})
+
+  # get host IP
+  HOST_IP=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
+
+  # Forward host port 80 to VM
+  sudo iptables -t nat -I PREROUTING -p tcp -d $HOST_IP --dport 80 -j DNAT --to-destination $VM_IP:80
+  sudo iptables -I FORWARD -m state -d $VM_IP/32 --state NEW,RELATED,ESTABLISHED -j ACCEPT
+  sudo iptables -t nat -A POSTROUTING -j MASQUERADE
 
   log "Cloudify CLI config is at ~/.cloudify/config.yaml"
   log "Cloudify CLI log is at ~/.cloudify/logs/cli.log"
+  log "Cloudify API access example: curl -u admin:admin --header 'Tenant: default_tenant' http://$HOST_IP/api/v3.1/status"
+  curl -u admin:admin --header 'Tenant: default_tenant' http://$HOST_IP/api/v3.1/status
+  log "Cloudify setup is complete!"
 }
 
 function demo() {
@@ -110,25 +146,116 @@ function demo() {
 #  echo "master-port: $(grep server ~/.kube/config | awk -F '/' '{print $3}' | awk -F ':' '{print $2}')" >>~/cloudify/blueprints/k8s-hello-world/inputs.yaml
 #  echo "file_content:" >>~/cloudify/blueprints/k8s-hello-world/inputs.yaml
 #  sed 's/^/  /' ~/.kube/config | tee -a ~/cloudify/blueprints/k8s-hello-world/inputs.yaml
-  cp ~/.kube/config ~/cloudify/blueprints/k8s-hello-world/kube.config
+  manager_ip=$2
+  cd ~/models/tools/cloudify/blueprints
 
-  cfy blueprints package -o ~/cloudify/blueprints/k8s-hello-world ~/cloudify/blueprints/k8s-hello-world
-  cfy blueprints upload -t default_tenant -b k8s-hello-world ~/cloudify/blueprints/k8s-hello-world.tar.gz
-  cfy deployments create -t default_tenant -b k8s-hello-world k8s-hello-world
-  cfy workflows list -d k8s-hello-world
-  cfy executions start install -d k8s-hello-world
-  pod_ip=$(kubectl get pods --namespace default -o jsonpath='{.status.podIP}' nginx)
-  while [[ "x$pod_ip" == "x" ]]; do
-    log "nginx pod IP is not yet assigned, waiting 10 seconds"
+  if [[ "$1" == "start" ]]; then
+    log "copy kube config from k8s master for insertion into blueprint"
+    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  \
+      ubuntu@$manager_ip:/home/ubuntu/.kube/config k8s-hello-world/kube.config
+
+    log "package the blueprint"
+    # CLI: cfy blueprints package -o ~/cloudify/blueprints/k8s-hello-world ~/cloudify/blueprints/k8s-hello-world
+    tar ckf /tmp/blueprint.tar k8s-hello-world
+
+    log "upload the blueprint"
+    # CLI: cfy blueprints upload -t default_tenant -b k8s-hello-world ~/cloudify/blueprints/k8s-hello-world.tar.gz
+    curl -X PUT -u admin:admin --header 'Tenant: default_tenant'  \
+      --header "Content-Type: application/octet-stream"  \
+      http://$manager_ip/api/v3.1/blueprints/k8s-hello-world?application_file_name=blueprint.yaml  \
+      -T /tmp/blueprint.tar | jq
+
+    log "create a deployment for the blueprint"
+    # CLI: cfy deployments create -t default_tenant -b k8s-hello-world k8s-hello-world
+    curl -X PUT -u admin:admin --header 'Tenant: default_tenant'  \
+      --header "Content-Type: application/json"  \
+      -d '{"blueprint_id": "k8s-hello-world", "inputs": {}}'  \
+      http://$manager_ip/api/v3.1/deployments/k8s-hello-world
     sleep 10
-    pod_ip=$(kubectl get pods --namespace default -o jsonpath='{.status.podIP}' nginx)
-  done
-  while ! curl http://$pod_ip ; do
-    log "nginx pod is not yet responding at http://$pod_ip, waiting 10 seconds"
+
+    # CLI: cfy workflows list -d k8s-hello-world
+
+    log "install the deployment pod and service"
+    # CLI: cfy executions start install -d k8s-hello-world
+    curl -X POST -u admin:admin --header 'Tenant: default_tenant'  \
+      --header "Content-Type: application/json"  \
+      -d '{"deployment_id":"k8s-hello-world", "workflow_id":"install"}'  \
+      http://$manager_ip/api/v3.1/executions | jq
+
+    log "get the service's assigned node_port"
+    port=$(curl -u admin:admin --header 'Tenant: default_tenant'  \
+      http://$manager_ip/api/v3.1/node-instances |  \
+      jq -r '.items[0].runtime_properties.kubernetes.spec.ports[0].node_port')
+    while [[ "$port" == "null" ]]; do
+      sleep 10
+      port=$(curl -u admin:admin --header 'Tenant: default_tenant'  \
+        http://$manager_ip/api/v3.1/node-instances |  \
+        jq -r '.items[0].runtime_properties.kubernetes.spec.ports[0].node_port')
+    done
+    log "node_port = $port"
+
+    log "verify service is responding"
+    while ! curl http://$manager_ip:$port ; do
+      log "nginx service is not yet responding at http://$manager_ip:$port, waiting 10 seconds"
+      sleep 10
+    done
+    log "service is active at http://$manager_ip:$port"
+  else
+    log "uninstall the service"
+    curl -X POST -u admin:admin --header 'Tenant: default_tenant' \
+      --header "Content-Type: application/json" \
+      -d '{"deployment_id":"k8s-hello-world", "workflow_id":"uninstall", "force": "true"}' \
+      http://$manager_ip/api/v3.1/executions
+    count=1
+    state=$(curl -u admin:admin --header 'Tenant: default_tenant' \
+      http://$manager_ip/api/v3.1/node-instances | jq -r '.items[0].state')
+    while [[ "$state" == "deleting" ]]; do
+      if [[ $count > 10 ]]; then
+        log "try to cancel all current executions"
+        exs=$(curl -u admin:admin --header 'Tenant: default_tenant' \
+          http://$manager_ip/api/v3.1/executions | jq -r '.items[].status')
+        i=0
+        for status in $exs; do
+          log "checking execution $i in state $status"
+          if [[ "$status" == "started" ]]; then
+            id=$(curl -u admin:admin --header 'Tenant: default_tenant' \
+              http://$manager_ip/api/v3.1/executions | jq -r ".items[$i].id")
+            curl -X POST -u admin:admin --header 'Tenant: default_tenant' \
+              --header "Content-Type: application/json" \
+              -d '{"deployment_id": "k8s-hello-world", "action": "cancel"}' \
+              http://$manager_ip/api/v3.1/executions/$id
+          fi
+          ((i++))
+        done
+        log "force delete deployment via cfy CLI"
+        ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+          ubuntu@$manager_ip cfy deployment delete -f \
+          -t default_tenant k8s-hello-world
+      fi
+      ((count ++))
+      state=$(curl -u admin:admin --header 'Tenant: default_tenant' \
+        http://$manager_ip/api/v3.1/node-instances | jq -r '.items[0].state')
+    done
+
+    log "delete the deployment"
+    curl -X DELETE -u admin:admin --header 'Tenant: default_tenant' \
+      http://$manager_ip/api/v3.1/deployments/k8s-hello-world
     sleep 10
-  done
-  log "nginx pod is active at http://$pod_ip"
-  curl http://$pod_ip
+    log "delete the blueprint"
+    curl -X DELETE -u admin:admin --header 'Tenant: default_tenant' \
+      http://$manager_ip/api/v3.1/blueprints/k8s-hello-world
+    sleep 10
+    log "verify the blueprint is deleted"
+    curl -u admin:admin --header 'Tenant: default_tenant' \
+      http://$manager_ip/api/v3.1/blueprints | jq
+  fi
+
+# API examples: use '| jq' to format JSON output
+# curl -u admin:admin --header 'Tenant: default_tenant' http://$manager_ip/api/v3.1/blueprints | jq
+# curl -u admin:admin --header 'Tenant: default_tenant' http://$manager_ip/api/v3.1/deployments | jq
+# curl -u admin:admin --header 'Tenant: default_tenant' http://$manager_ip/api/v3.1/executions | jq
+# curl -u admin:admin --header 'Tenant: default_tenant' http://$manager_ip/api/v3.1/deployments | jq -r '.items[0].blueprint_id'
+# curl -u admin:admin --header 'Tenant: default_tenant' http://$manager_ip/api/v3.1/node-instances | jq
 }
 
 function clean () {
@@ -145,7 +272,7 @@ case "$1" in
     setup
     ;;
   "demo")
-    demo
+    demo $2 $3
     ;;
   "clean")
     clean
