@@ -131,10 +131,12 @@ function setup () {
   sudo iptables -I FORWARD -m state -d $VM_IP/32 --state NEW,RELATED,ESTABLISHED -j ACCEPT
   sudo iptables -t nat -A POSTROUTING -j MASQUERADE
 
-  while ! curl -u admin:admin --header 'Tenant: default_tenant' http://$HOST_IP/api/v3.1/status ; do
-    log "Cloudify API is not yet responding, waiting 10 seconds"
-    sleep 10
-  done
+# Access to the API via the primary interface, from the local host, is not
+# working for some reason... skip this for now
+#  while ! curl -u admin:admin --header 'Tenant: default_tenant' http://$HOST_IP/api/v3.1/status ; do
+#    log "Cloudify API is not yet responding, waiting 10 seconds"
+#    sleep 10
+#  done
   log "Cloudify CLI config is at ~/.cloudify/config.yaml"
   log "Cloudify CLI log is at ~/.cloudify/logs/cli.log"
   log "Cloudify API access example: curl -u admin:admin --header 'Tenant: default_tenant' http://$HOST_IP/api/v3.1/status"
