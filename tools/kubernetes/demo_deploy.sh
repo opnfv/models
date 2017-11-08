@@ -92,7 +92,8 @@ export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecki
 export NODE_IP=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master  kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
 echo "Helm chart demo app dokuwiki is available at http://$NODE_IP:$NODE_PORT/"
 # TODO update Cloudify demo app to have public exposed service address
-echo "Cloudify-deployed demo app nginx is available at TBD"
+port=$( bash ~/models/tools/cloudify/k8s-cloudify.sh port nginx $master)
+echo "Cloudify-deployed demo app nginx is available at http://$master:$port"
 echo "Prometheus UI is available at http://$master:9090"
 echo "Grafana dashboards are available at http://$master:3000 (login as admin/admin)"
 echo "Grafana API is available at http://admin:admin@$master:3000/api/v1/query?query=<string>"
