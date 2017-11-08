@@ -129,7 +129,7 @@ EOF
 
   exp=$(jq '.data.result|length' /tmp/up)
   log "$exp exporters are up"
-  while [[ $exp > 0 ]]; do
+  while [[ $exp -gt 0 ]]; do
     ((exp--))
     eip=$(jq -r ".data.result[$exp].metric.instance" /tmp/up)
     job=$(jq -r ".data.result[$exp].metric.job" /tmp/up)

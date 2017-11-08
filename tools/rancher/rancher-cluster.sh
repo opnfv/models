@@ -227,7 +227,7 @@ function wait_till_healthy() {
   id=$(rancher ps | grep " $service " | awk "{print \$1}")
   health=$(rancher inspect $id | jq -r ".healthState")
   state=$(rancher inspect $id | jq -r ".state")
-  while [[ $tries > 0 && "$health" != "healthy" ]]; do
+  while [[ $tries -gt 0 && "$health" != "healthy" ]]; do
     health=$(rancher inspect $id | jq -r ".healthState")
     echo $service is $health
     sleep 10

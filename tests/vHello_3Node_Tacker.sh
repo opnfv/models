@@ -126,7 +126,7 @@ get_floating_net () {
 try () {
   count=$1
   $3
-  while [[ $? == 1 && $count > 0 ]]; do 
+  while [[ $? == 1 && $count -gt 0 ]]; do 
     sleep $2
     let count=$count-1
     $3
@@ -179,7 +179,7 @@ say_hello() {
   echo "$0: $(date) Testing $1"
   pass=false
   count=10
-  while [[ $count > 0 && $pass != true ]] 
+  while [[ $count -gt 0 && $pass != true ]] 
   do 
     sleep 30
     let count=$count-1
@@ -315,7 +315,7 @@ start() {
 
   count=0
   resp=$(curl http://${vdu_ip[1]})
-  while [[ $count < 10 && "$resp" == "" ]]; do
+  while [[ $count -lt 10 && "$resp" == "" ]]; do
     echo "$0: $(date) waiting for web server at VDU1 to startup"
     sleep 60
     let count=$count+1
@@ -351,7 +351,7 @@ stop() {
     try 12 10 "tacker vnf-delete hello-3node"
     # It can take some time to delete a VNF - thus wait 2 minutes
     count=12
-    while [[ $count > 0 && "$(tacker vnf-list|grep hello-3node|awk '{print $2}')" != '' ]]; do 
+    while [[ $count -gt 0 && "$(tacker vnf-list|grep hello-3node|awk '{print $2}')" != '' ]]; do 
       sleep 10
       let count=$count-1
     done 
