@@ -27,6 +27,7 @@
 #. - Ubuntu server for kubernetes cluster nodes (master and worker nodes)
 #. - MAAS server as cluster admin for kubernetes master/worker nodes
 #. - Password-less ssh key provided for node setup
+#. - hostname of kubernetes master setup in DNS or /etc/hosts
 #. Usage: on the MAAS server
 #. $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
 #. $ bash ~/models/tools/kubernetes/demo_deploy.sh <key> "<hosts>" <master>
