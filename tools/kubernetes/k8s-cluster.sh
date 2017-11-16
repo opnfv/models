@@ -58,9 +58,9 @@ function setup_prereqs() {
 sudo apt-get -y remove kubectl kubelet kubeadm
 sudo apt-get update
 sudo apt-get upgrade -y
-# Set hostname on agent nodes
-if [[ "$1" == "agent" ]]; then
-  echo $(ip route get 8.8.8.8 | awk '{print $NF; exit}') $HOSTNAME | sudo tee -a /etc/hosts
+# Set hostname
+if [[ $(grep -c $HOSTNAME /etc/hosts) -eq 0 ]]; then
+  echo "$(ip route get 8.8.8.8 | awk '{print $NF; exit}') $HOSTNAME" | sudo tee -a /etc/hosts
 fi
 # Install docker 1.12 (default for xenial is 1.12.6)
 sudo apt-get install -y docker.io

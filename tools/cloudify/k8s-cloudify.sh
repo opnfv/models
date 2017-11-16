@@ -141,6 +141,7 @@ function setup () {
   HOST_IP=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
 
   # Forward host port 80 to VM
+  log "Setip iptables to forward $HOST_IP port 80 to Cloudify Manager VM at $VM_IP"
   sudo iptables -t nat -I PREROUTING -p tcp -d $HOST_IP --dport 80 -j DNAT --to-destination $VM_IP:80
   sudo iptables -I FORWARD -m state -d $VM_IP/32 --state NEW,RELATED,ESTABLISHED -j ACCEPT
   sudo iptables -t nat -A POSTROUTING -j MASQUERADE
