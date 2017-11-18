@@ -9,7 +9,6 @@
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
@@ -19,6 +18,7 @@
 #. Usage:
 #.   From a server with access to the kubernetes master node:
 #.   $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
+#.   $ cd models/tools/cloudify
 #.   $ scp -r ~/models/tools/cloudify ubuntu@<k8s-master>:/home/ubuntu/.
 #.     <k8s-master>: IP or hostname of kubernetes master server
 #.   $ ssh -x ubuntu@<k8s-master> cloudify/k8s-cloudify.sh prereqs
@@ -51,8 +51,7 @@ function fail() {
 function log() {
   f=$(caller 0 | awk '{print $2}')
   l=$(caller 0 | awk '{print $1}')
-  echo ""
-  echo "$f:$l ($(date)) $1"
+  echo; echo "$f:$l ($(date)) $1"
 }
 
 function prereqs() {
@@ -178,7 +177,7 @@ function service_port() {
     sleep 10
     ((tries--))
   done
-  if [[ "$port" == "" ]]; then
+  if [[ "$port" == "null" ]]; then
     jq -r '.items' /tmp/json
     fail "node_port not found for service"
   fi
@@ -283,6 +282,7 @@ function stop() {
     -d "{\"deployment_id\":\"$bp\", \"workflow_id\":\"uninstall\"}" \
     -o /tmp/json http://$manager_ip/api/v3.1/executions
   id=$(jq -r ".id" /tmp/json)
+  log "uninstall execution id = $id"
   status=""
   tries=1
   while [[ "$status" != "terminated" && $tries -lt 10 ]]; do

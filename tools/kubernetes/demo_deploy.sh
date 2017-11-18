@@ -34,7 +34,7 @@
 #. <key>: name of private key for cluster node ssh (in current folder)
 #. <hosts>: space separated list of hostnames managed by MAAS
 #. <master>: IP of cluster master node
-#. <workers>: space separated list of agent node IPs
+#. <workers>: space separated list of worker node IPs
 #. <pub-net>: CID formatted public network
 #. <priv-net>: CIDR formatted private network (may be same as pub-net)
 #. <ceph-mode>: "helm" or "baremetal"
@@ -51,43 +51,56 @@ ceph_mode=$7
 ceph_dev=$8
 extras=$9
 
+function run_master() {
+ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+  ubuntu@$master <<EOF
+exec ssh-agent bash
+ssh-add $key
+$1
+EOF
+}
+
 source ~/models/tools/maas/deploy.sh $1 "$2" $9
 eval `ssh-agent`
 ssh-add $key
-if [[ "x$extras" != "x" ]]; then source $extras; fi
 scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $key ubuntu@$master:/home/ubuntu/$key
-echo "$0 $(date): Setting up kubernetes..."
+
+echo; echo "$0 $(date): Setting up kubernetes master..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/kubernetes/* \
   ubuntu@$master:/home/ubuntu/.
-ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master <<EOF
-exec ssh-agent bash
-ssh-add $key
-bash k8s-cluster.sh all "$workers" $priv_net $pub_net $ceph_mode $ceph_dev
-EOF
-# TODO: Figure this out... Have to break the setup into two steps as something
-# causes the ssh session to end before the prometheus setup, if both scripts
-# are in the same ssh session
-echo "Setting up Prometheus..."
-ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master mkdir -p \
-  /home/ubuntu/models/tools/prometheus
+run_master "bash k8s-cluster.sh master"
+
+echo; echo "$0 $(date): Setting up kubernetes workers..."
+run_master "bash k8s-cluster.sh workers \"$workers\""
+
+echo; echo "$0 $(date): Setting up helm..."
+run_master "bash k8s-cluster.sh helm"
+
+echo; echo "$0 $(date): Verifying kubernetes+helm install..."
+run_master "bash k8s-cluster.sh demo start nginx"
+run_master "bash k8s-cluster.sh demo stop nginx"
+
+echo; echo "$0 $(date): Setting up ceph-helm"
+run_master "bash k8s-cluster.sh ceph \"$workers\" $priv_net $pub_net $ceph_mode $ceph_dev"
+
+echo; echo "$0 $(date): Verifying kubernetes+helm+ceph install..."
+run_master "bash k8s-cluster.sh demo start dokuwiki"
+
+echo; echo "Setting up Prometheus..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
-  ubuntu@$master:/home/ubuntu/models/tools/prometheus
-ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master <<EOF
-exec ssh-agent bash
-ssh-add $key
-cd models/tools/prometheus
-bash prometheus-tools.sh all "$workers"
-EOF
-echo "$0 $(date): Setting up cloudify..."
+  ubuntu@$master:/home/ubuntu/.
+run_master "bash prometheus-tools.sh all \"$workers\""
+
+echo; echo "$0 $(date): Setting up cloudify..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/cloudify \
   ubuntu@$master:/home/ubuntu/.
-ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master \
-  bash cloudify/k8s-cloudify.sh prereqs
-ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master \
-  bash cloudify/k8s-cloudify.sh setup
-source ~/models/tools/cloudify/k8s-cloudify.sh demo start $master
+run_master "bash cloudify/k8s-cloudify.sh prereqs"
+run_master "bash cloudify/k8s-cloudify.sh setup"
 
-echo "$0 $(date): All done!"
+echo; echo "$0 $(date): Verifying kubernetes+helm+ceph+cloudify install..."
+bash ~/models/tools/cloudify/k8s-cloudify.sh demo start $master
+
+echo; echo "$0 $(date): All done!"
 export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
 export NODE_IP=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master  kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
 echo "Helm chart demo app dokuwiki is available at http://$NODE_IP:$NODE_PORT/"
