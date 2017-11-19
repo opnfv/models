@@ -171,7 +171,7 @@ EOF
   # To add additional dashboards, browse the URL above and import the dashboard via the id displayed for the dashboard
   # Select the home icon (upper left), Dashboards / Import, enter the id, select load, and select the Prometheus datasource
 
-  cd ~/models/tools/prometheus/dashboards
+  cd $WORK_DIR/dashboards
   boards=$(ls)
   for board in $boards; do
     curl -X POST -u admin:admin -H "Accept: application/json" -H "Content-type: application/json" -d @${board} http://$grafana_ip:3000/api/dashboards/db
@@ -198,6 +198,7 @@ function run_and_connect_grafana() {
   log "connect_grafana complete"
 }
 
+export WORK_DIR=$(pwd)
 nodes=$2
 case "$1" in
   setup)
