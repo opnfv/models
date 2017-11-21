@@ -16,12 +16,10 @@
 #. What this is: Complete scripted deployment of an experimental kubernetes-based
 #. cloud-native application platform. When complete, kubernetes and the following
 #. will be installed:
-#. - helm and dokuwiki as a demo helm cart based application
+#. - helm and dokuwiki as a demo helm chart based application
 #. - prometheus + grafana for cluster monitoring/stats
 #. - cloudify + kubernetes plugin and a demo hello world (nginx) app installed
-#.  will be setup with:
-#. Prometheus dashboard: http://<master_public_ip>:9090
-#. Grafana dashboard: http://<master_public_ip>:3000
+#. - OPNFV VES as an ONAP-compatible monitoring platform
 #.
 #. Prerequisites:
 #. - Ubuntu server for kubernetes cluster nodes (master and worker nodes)
@@ -100,6 +98,17 @@ run_master "bash cloudify/k8s-cloudify.sh setup"
 echo; echo "$0 $(date): Verifying kubernetes+helm+ceph+cloudify install..."
 bash ~/models/tools/cloudify/k8s-cloudify.sh demo start $master
 
+echo; echo "$0 $(date): Setting up VES master node"
+if [[ ! -d ~/ves ]]; then
+  git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
+fi
+bash ~/ves/tools/demo_deploy.sh master $master $key
+
+echo; echo "$0 $(date): Setting up collectd for VES events from worker nodes"
+for worker in $workers; do
+bash ~/ves/tools/demo_deploy.sh worker $worker $key
+done
+
 echo; echo "$0 $(date): All done!"
 export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
 export NODE_IP=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master  kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
@@ -112,3 +121,4 @@ echo "Grafana dashboards are available at http://$master:3000 (login as admin/ad
 echo "Grafana API is available at http://admin:admin@$master:3000/api/v1/query?query=<string>"
 echo "Kubernetes API is available at https://$master:6443/api/v1/"
 echo "Cloudify API access example: curl -u admin:admin --header 'Tenant: default_tenant' http://$master/api/v3.1/status"
+echo "VES Grafana dashboard is at http://$master:3001 (login as admin/admin)"
