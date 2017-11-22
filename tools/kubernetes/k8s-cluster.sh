@@ -224,8 +224,6 @@ function start_chart() {
       wait_for_service nx-nginx
       ;;
     mediawiki)
-      # NOT YET WORKING
-      # mariadb: Readiness probe failed: mysqladmin: connect to server at 'localhost' failed
       mkdir ./mediawiki/charts
       cp -r ./mariadb ./mediawiki/charts
       # LoadBalancer is N/A for baremetal (public cloud only) - use NodePort
@@ -243,8 +241,6 @@ function start_chart() {
       wait_for_service dw-dokuwiki
       ;;
     wordpress)
-      # NOT YET WORKING
-      # mariadb: Readiness probe failed: mysqladmin: connect to server at 'localhost' failed
       mkdir ./wordpress/charts
       cp -r ./mariadb ./wordpress/charts
       sed -i -- 's/LoadBalancer/NodePort/g' ./wordpress/values.yaml
@@ -254,8 +250,6 @@ function start_chart() {
       wait_for_service wp-wordpress
       ;;
     redmine)
-      # NOT YET WORKING
-      # mariadb: Readiness probe failed: mysqladmin: connect to server at 'localhost' failed
       mkdir ./redmine/charts
       cp -r ./mariadb ./redmine/charts
       cp -r ./postgresql ./redmine/charts
