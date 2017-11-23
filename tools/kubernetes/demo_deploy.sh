@@ -102,6 +102,10 @@ echo; echo "$0 $(date): Setting up VES master node"
 if [[ ! -d ~/ves ]]; then
   git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
 fi
+ves_grafana_host=$master:3000
+ves_grafana_auth=admin:admin
+export ves_grafana_host
+export ves_grafana_auth
 bash ~/ves/tools/demo_deploy.sh master $master $key
 
 echo; echo "$0 $(date): Setting up collectd for VES events from worker nodes"
@@ -117,8 +121,7 @@ echo "Helm chart demo app dokuwiki is available at http://$NODE_IP:$NODE_PORT/"
 port=$( bash ~/models/tools/cloudify/k8s-cloudify.sh port nginx $master)
 echo "Cloudify-deployed demo app nginx is available at http://$master:$port"
 echo "Prometheus UI is available at http://$master:9090"
-echo "Grafana dashboards are available at http://$master:3000 (login as admin/admin)"
-echo "Grafana API is available at http://admin:admin@$master:3000/api/v1/query?query=<string>"
+echo "Grafana dashboards are available at http://$ves_grafana_host (login as $ves_grafana_auth)"
+echo "Grafana API is available at http://$ves_grafana_auth@$ves_influx_host/api/v1/query?query=<string>"
 echo "Kubernetes API is available at https://$master:6443/api/v1/"
 echo "Cloudify API access example: curl -u admin:admin --header 'Tenant: default_tenant' http://$master/api/v3.1/status"
-echo "VES Grafana dashboard is at http://$master:3001 (login as admin/admin)"
