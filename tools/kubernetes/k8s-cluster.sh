@@ -66,7 +66,8 @@ sudo apt-get update
 sudo apt-get upgrade -y
 if [[ $(grep -c $HOSTNAME /etc/hosts) -eq 0 ]]; then
   echo; echo "prereqs.sh: ($(date)) Add $HOSTNAME to /etc/hosts"
-  echo "$(ip route get 8.8.8.8 | awk '{print $NF; exit}') $HOSTNAME" | sudo tee -a /etc/hosts
+  echo "$(ip route get 8.8.8.8 | awk '{print $NF; exit}') $HOSTNAME" \
+    | sudo tee -a /etc/hosts
 fi
 echo; echo "prereqs.sh: ($(date)) Install latest docker"
 sudo apt-get install -y docker.io
@@ -86,7 +87,8 @@ deb http://apt.kubernetes.io/ kubernetes-xenial main
 EOF
 sudo apt-get update
 echo; echo "prereqs.sh: ($(date)) Install kubectl, kubelet, kubeadm"
-sudo apt-get -y install --allow-downgrades kubectl=${KUBE_VERSION}-00 kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00
+sudo apt-get -y install --allow-downgrades kubectl=${KUBE_VERSION}-00 \
+  kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00
 echo; echo "prereqs.sh: ($(date)) Install jq for API output parsing"
 sudo apt-get -y install jq
 echo; echo "prereqs.sh: ($(date)) Set firewall rules"
@@ -121,7 +123,8 @@ function setup_k8s_master() {
   bash /tmp/prereqs.sh master
   # per https://kubernetes.io/docs/setup/independent/create-cluster-kubeadm/
   # If the following command fails, run "kubeadm reset" before trying again
-  # --pod-network-cidr=192.168.0.0/16 is required for calico; this should not conflict with your server network interface subnets
+  # --pod-network-cidr=192.168.0.0/16 is required for calico; this should not 
+  # conflict with your server network interface subnets
   sudo kubeadm init --pod-network-cidr=192.168.0.0/16 >>/tmp/kubeadm.out
   cat /tmp/kubeadm.out
   export k8s_joincmd=$(grep "kubeadm join" /tmp/kubeadm.out)
@@ -156,16 +159,23 @@ function setup_k8s_workers() {
 
   for worker in $workers; do
     log "Install worker at $worker"
-    if ! scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/prereqs.sh ubuntu@$worker:/tmp/prereqs.sh ; then
+    if ! scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      /tmp/prereqs.sh ubuntu@$worker:/tmp/prereqs.sh ; then
       fail "Failed copying setup files to $worker"
     fi
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$worker bash /tmp/prereqs.sh worker
-    # Workaround for "[preflight] Some fatal errors occurred: /var/lib/kubelet is not empty" per https://github.com/kubernetes/kubeadm/issues/1
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$worker sudo kubeadm reset
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$worker sudo $k8s_joincmd
+    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ~/k8s_env.sh \
+      ubuntu@$worker:/home/ubuntu/.
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ubuntu@$worker bash /tmp/prereqs.sh worker
+    # Workaround for "[preflight] Some fatal errors occurred: /var/lib/kubelet
+    # is not empty" per https://github.com/kubernetes/kubeadm/issues/1
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ubuntu@$worker sudo kubeadm reset
+    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+      ubuntu@$worker sudo $k8s_joincmd
   done
 
-  log "Cluster is ready when all nodes in the output of 'kubectl get nodes' show as 'Ready'."
+  log "Cluster is ready when all nodes in 'kubectl get nodes' show as 'Ready'."
 }
 
 function setup_ceph() {

@@ -14,18 +14,20 @@
 #
 #. What this is: Setup script for Cloudify use with Kubernetes.
 #. Prerequisites:
-#. - Kubernetes cluster installed per k8s-cluster.sh (in this repo)
+#. - OPNFV Models repo cloned into ~/models, i.e.
+#.   git clone https://gerrit.opnfv.org/gerrit/models ~/models
+#. - Kubernetes cluster installed per tools/kubernetes/demo_deploy.sh and
+#.   environment setup file ~/models/tools/k8s_env.sh as setup by demo_deploy.sh
 #. Usage:
 #.   From a server with access to the kubernetes master node:
-#.   $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
-#.   $ cd models/tools/cloudify
-#.   $ scp -r ~/models/tools/cloudify ubuntu@<k8s-master>:/home/ubuntu/.
+#.   $ cd ~/models/tools/cloudify
+#.   $ scp -r ~/models/tools/* ubuntu@<k8s-master>:/home/ubuntu/.
 #.     <k8s-master>: IP or hostname of kubernetes master server
 #.   $ ssh -x ubuntu@<k8s-master> cloudify/k8s-cloudify.sh prereqs
 #.     prereqs: installs prerequisites and configures ubuntu user for kvm use
 #.   $ ssh -x ubuntu@<k8s-master> bash cloudify/k8s-cloudify.sh setup
 #.     setup: installs cloudify CLI and Manager
-#.   $ bash k8s-cloudify.sh demo <start|stop> <k8s-master>
+#.   $ bash k8s-cloudify.sh demo <start|stop>
 #.     demo: control demo blueprint
 #.     start|stop: start or stop the demo
 #.     <k8s-master>: IP or hostname of kubernetes master server
@@ -159,7 +161,6 @@ function setup () {
 
 function service_port() {
   name=$1
-  manager_ip=$2
   tries=6
   port="null"
   while [[ "$port" == "null" && $tries -gt 0 ]]; do
@@ -186,7 +187,6 @@ function service_port() {
 function start() {
   name=$1
   bp=$2
-  manager_ip=$3
   log "start app $name with blueprint $bp"
   log "copy kube config from k8s master for insertion into blueprint"
   scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
@@ -235,7 +235,7 @@ function start() {
 function stop() {
   name=$1
   bp=$2
-  manager_ip=$3
+
   # TODO: fix the need for this workaround
   log "try to first cancel all current executions"
   curl -s -u admin:admin --header 'Tenant: default_tenant' \
@@ -355,7 +355,6 @@ function demo() {
 #  echo "master-port: $(grep server ~/.kube/config | awk -F '/' '{print $3}' | awk -F ':' '{print $2}')" >>~/cloudify/blueprints/k8s-hello-world/inputs.yaml
 #  echo "file_content:" >>~/cloudify/blueprints/k8s-hello-world/inputs.yaml
 #  sed 's/^/  /' ~/.kube/config | tee -a ~/cloudify/blueprints/k8s-hello-world/inputs.yaml
-  manager_ip=$2
   cd ~/models/tools/cloudify/blueprints
 
   if [[ "$1" == "start" ]]; then
@@ -377,6 +376,9 @@ function clean () {
 }
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
+source ~/k8s_env.sh
+manager_ip=$k8s_master
+
 case "$1" in
   "prereqs")
     prereqs
@@ -388,13 +390,13 @@ case "$1" in
     demo $2 $3
     ;;
   "start")
-    start $2 $3 $4
+    start $2 $3
     ;;
   "stop")
-    stop $2 $3 $4
+    stop $2 $3
     ;;
   "port")
-    service_port $2 $3
+    service_port $2
     ;;
   "clean")
     clean
