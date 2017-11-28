@@ -38,6 +38,9 @@
 #. <ceph-mode>: "helm" or "baremetal"
 #. <ceph-dev>: disk (e.g. sda, sdb) or folder (e.g. "/ceph")
 #. <extras>: optional name of script for extra setup functions as needed
+#.
+#. See tools/demo_deploy.sh in the OPNFV VES repo for additional environment
+#. variables (mandatory/optional) for VES
 
 function run() {
   start=$((`date +%s`/60))
@@ -141,6 +144,8 @@ ves_grafana_auth=admin:admin
 export ves_grafana_auth
 ves_kafka_hostname=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$k8s_master hostname)
 export ves_kafka_hostname
+ves_loglevel=$ves_loglevel
+export ves_loglevel
 # Can't pass quoted strings in commands
 start=$((`date +%s`/60))
 bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_master "$k8s_workers"
