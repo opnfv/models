@@ -1,17 +1,7 @@
 This folder contains scripts etc to setup a kubernetes cluster with the following type of environment and components:
 * hardware
-  * 2 or more bare metal servers
-  * two connected networks (public and private): may work if just a single network
-  * one or more disks on each server: ceph-osd can be setup on an unused disk, or a folder (/ceph) on the host OS disk
-* kubernetes
-  * single master (admin) node
-  * other cluster nodes
-* ceph: ceph-mon on admin, ceph-osd on other nodes
-* helm on admin node
-* demo helm charts, cloned from https://github.com/kubernetes/charts and modified/tested to work on this cluster
-
-See comments in [setup script](k8s-cluster.sh) for more info.
-
-This is a work in progress!
-
-![Resulting Cluster](/docs/images/models-k8s.png?raw=true "Resulting Cluster")
+  * 2 or more bare metal servers  * two connected networks (public and private): may work if just a single network  * one or more disks on each server: ceph-osd can be setup on an unused disk, or a folder (/ceph) on the host OS disk* Kubernetes  * single k8s master (admin) node  * other cluster (k8s worker) nodes* Ceph: backend for persistent volume claims (PVCs) for the k8s cluster, deployed using Helm charts from https://github.com/att/netarbiter* Helm on k8s master (used for initial cluster deployment only)  * demo helm charts for Helm install verification etc, cloned from https://github.com/kubernetes/charts and modified/tested to work on this cluster* Prometheus: server on the k8s master, exporters on the k8s workers* Cloudify CLI and Cloudify Manager with Kubernetes plugin (https://github.com/cloudify-incubator/cloudify-kubernetes-plugin)* OPNFV VES Collector and Agent* OPNFV Barometer collectd plugin with libvirt and kafka support* As many components as possible above will be deployed using k8s charts, managed either through Helm or Cloudify
+A larger goal of this work is to demonstrate hybrid cloud deployment as indicated by the presence of OpenStack nodes in the diagram below.
+See comments in [setup script](k8s-cluster.sh) and other scripts in the for more info.
+This is a work in progress!
+![Resulting Cluster](/docs/images/models-k8s.png?raw=true "Resulting Cluster")
