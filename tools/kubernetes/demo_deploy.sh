@@ -42,6 +42,10 @@
 function run() {
   start=$((`date +%s`/60))
   $1
+  step_end "$1"
+}
+
+function step_end() {
   end=$((`date +%s`/60))
   runtime=$((end-start))
   log "step \"$1\" duration = $runtime minutes"
@@ -55,9 +59,7 @@ exec ssh-agent bash
 ssh-add $k8s_key
 $1
 EOF
-  end=$((`date +%s`/60))
-  runtime=$((end-start))
-  log "step \"$1\" duration = $runtime minutes"
+  step_end "$1"
 }
 
 extras=$9
@@ -139,7 +141,10 @@ ves_grafana_auth=admin:admin
 export ves_grafana_auth
 ves_kafka_hostname=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$k8s_master hostname)
 export ves_kafka_hostname
-run "bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_master \"$k8s_workers\""
+# Can't pass quoted strings in commands
+start=$((`date +%s`/60))
+bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_master "$k8s_workers"
+step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_master \"$k8s_workers\""
 
 echo; echo "$0 $(date): All done!"
 export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$k8s_master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
