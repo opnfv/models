@@ -140,15 +140,8 @@ function setup_k8s_master() {
   # Updated to deploy Calico 2.6 per the create-cluster-kubeadm guide above
   #  sudo kubectl apply -f http://docs.projectcalico.org/v2.4/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
   sudo kubectl apply -f https://docs.projectcalico.org/v2.6/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
-}
 
-function setup_k8s_workers() {
-  workers="$1"
-  export k8s_joincmd=$(grep "kubeadm join" /tmp/kubeadm.out)
-  log "Installing workers at $1 with joincmd: $k8s_joincmd"
-
-  setup_prereqs
-
+  log "Wait for kubedns to be Running"
   kubedns=$(kubectl get pods --all-namespaces | grep kube-dns | awk '{print $4}')
   while [[ "$kubedns" != "Running" ]]; do
     log "kube-dns status is $kubedns. Waiting 60 seconds for it to be 'Running'"
@@ -156,6 +149,12 @@ function setup_k8s_workers() {
     kubedns=$(kubectl get pods --all-namespaces | grep kube-dns | awk '{print $4}')
   done
   log "kube-dns status is $kubedns"
+}
+
+function setup_k8s_workers() {
+  workers="$1"
+  export k8s_joincmd=$(grep "kubeadm join" /tmp/kubeadm.out)
+  log "Installing workers at $1 with joincmd: $k8s_joincmd"
 
   for worker in $workers; do
     log "Install worker at $worker"
@@ -166,16 +165,27 @@ function setup_k8s_workers() {
     scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ~/k8s_env.sh \
       ubuntu@$worker:/home/ubuntu/.
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$worker bash /tmp/prereqs.sh worker
-    # Workaround for "[preflight] Some fatal errors occurred: /var/lib/kubelet
-    # is not empty" per https://github.com/kubernetes/kubeadm/issues/1
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$worker sudo kubeadm reset
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$worker sudo $k8s_joincmd
+      ubuntu@$worker <<EOF > /dev/null 2>&1 &
+bash /tmp/prereqs.sh worker
+# Workaround for "[preflight] Some fatal errors occurred: /var/lib/kubelet
+# is not empty" per https://github.com/kubernetes/kubeadm/issues/1
+sudo kubeadm reset
+sudo $k8s_joincmd
+EOF
   done
 
-  log "Cluster is ready when all nodes in 'kubectl get nodes' show as 'Ready'."
+  for worker in $workers; do
+    host=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$worker hostname)
+    log "checking node $host"
+    status=$(kubectl get nodes | awk "/$host/ {print \$2}")
+    while [[ "$status" != "Ready" ]]; do
+      log "node $host is \"$status\", waiting 10 seconds for it to be 'Ready'."
+      status=$(kubectl get nodes | awk "/$host/ {print \$2}")
+      sleep 10
+    done
+    log "node $host is 'Ready'."
+  done
+  log "Cluster is ready (all nodes in 'kubectl get nodes' show as 'Ready')."
 }
 
 function setup_ceph() {
