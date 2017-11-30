@@ -65,7 +65,7 @@ search ceph.svc.cluster.local svc.cluster.local cluster.local
 options ndots:5
 EOF
 
-  ./helm-install-ceph.sh cephtest $private_net $public_net
+  ./helm-install-ceph.sh cephtest $public_net $private_net
 
   log "Check the pod status of ceph-mon, ceph-mgr, ceph-mon-check, and rbd-provisioner"
   services="rbd-provisioner ceph-mon-0 ceph-mgr ceph-mon-check"
