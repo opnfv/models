@@ -16,13 +16,20 @@
 #. What this is: Setup script for clearwater-docker as deployed by Cloudify 
 #.   with Kubernetes. See https://github.com/Metaswitch/clearwater-docker
 #.   for more info.
+#.
 #. Prerequisites:
 #. - Kubernetes cluster installed per k8s-cluster.sh (in this repo)
 #. - user (running this script) added to the "docker" group
+#. - clearwater-docker images created and uploaded to docker hub under the 
+#.   <hub-user> account as <hub-user>/clearwater-<vnfc> where vnfc is the name
+#.   of the specific containers as built by build/clearwater-docker.sh
+#.
 #. Usage:
 #.   From a server with access to the kubernetes master node:
 #.   $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
-
+#.   $ cd ~/models/tools/cloudify/
+#.   $ bash k8s-cloudify-clearwater.sh <start|stop> <hub-user> <manager>
+#.
 #. Status: this is a work in progress, under test.
 
 function fail() {
@@ -37,7 +44,7 @@ function log() {
   echo "$f:$l ($(date)) $1"
 }
 
-function setup() {
+function build_local() {
   master=$1
   log "deploy local docker registry on k8s master"
   # Per https://docs.docker.com/registry/deploying/
@@ -57,12 +64,34 @@ function setup() {
     docker build -t clearwater/$i $i
   done
   
+  # workaround for https://www.bountysource.com/issues/37326551-server-gave-http-response-to-https-client-error
+  # May not need both...
+  if [[ "$dist" == "ubuntu" ]]; then
+    check=$(grep -c $master /etc/default/docker)
+    if [[ $check -eq 0 ]]; then
+      echo "DOCKER_OPTS=\"--insecure-registry $master:5000\"" | sudo tee -a /etc/default/docker
+      sudo systemctl daemon-reload
+      sudo service docker restart
+    fi
+  fi
+  check=$(grep -c insecure-registry /lib/systemd/system/docker.service)
+  if [[ $check -eq 0 ]]; then
+    sudo sed -i -- "s~ExecStart=/usr/bin/dockerd -H fd://~ExecStart=/usr/bin/dockerd -H fd:// --insecure-registry $master:5000~" /lib/systemd/system/docker.service
+    sudo systemctl daemon-reload
+    sudo service docker restart
+  fi
+
+  log "deploy local docker registry on k8s master"
+  # Per https://docs.docker.com/registry/deploying/
+  # sudo docker run -d -p 5000:5000 --restart=always --name registry registry:2
+
   log "push images to local docker repo on k8s master"
   for i in $vnfc ; do
     docker tag clearwater/$i:latest $master:5000/clearwater/$i:latest
     docker push $master:5000/clearwater/$i:latest
   done
 }
+
 
 function start() {
   master=$1
@@ -72,23 +101,13 @@ function stop() {
   master=$1
 }
 
-function clean() {
-  master=$1
-}
-
-dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
+dist=$(grep --m 1 ID /etc/os-release | awk -F '=' '{print $2}')
 case "$1" in
-  "setup")
-    setup $2
-    ;;
   "start")
     start $2
     ;;
   "stop")
     stop $2
-    ;;
-  "clean")
-    clean
     ;;
   *)
     grep '#. ' $0
