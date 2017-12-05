@@ -22,16 +22,16 @@
 #. - OPNFV VES as an ONAP-compatible monitoring platform
 #.
 #. Prerequisites:
-#. - Ubuntu server for kubernetes cluster nodes (master and worker nodes)
-#. - MAAS server as cluster admin for kubernetes master/worker nodes
+#. - MAAS server as cluster admin for k8s master/worker nodes.
 #. - Password-less ssh key provided for node setup
 #. - hostname of kubernetes master setup in DNS or /etc/hosts
 #. Usage: on the MAAS server
 #. $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
-#. $ bash ~/models/tools/kubernetes/demo_deploy.sh <key> "<hosts>" <master>
-#.     "<workers>" <pub-net> <priv-net> <ceph-mode> <ceph-dev> [<extras>]
-#. <key>: name of private key for cluster node ssh (in current folder)
+#. $ bash ~/models/tools/kubernetes/demo_deploy.sh "<hosts>" <os> <key>
+#.   <master> "<workers>" <pub-net> <priv-net> <ceph-mode> <ceph-dev> [<extras>]
 #. <hosts>: space separated list of hostnames managed by MAAS
+#. <os>: OS to deploy, one of "ubuntu" (Xenial) or "centos" (Centos 7)
+#. <key>: name of private key for cluster node ssh (in current folder)
 #. <master>: IP of cluster master node
 #. <workers>: space separated list of worker node IPs
 #. <pub-net>: CID formatted public network
@@ -58,7 +58,7 @@ function step_end() {
 function run_master() {
   start=$((`date +%s`/60))
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    ubuntu@$k8s_master <<EOF
+    $k8s_user@$k8s_master <<EOF
 exec ssh-agent bash
 ssh-add $k8s_key
 $1
@@ -66,19 +66,22 @@ EOF
   step_end "$1"
 }
 
-extras=$9
+extras=${10}
 
+# Note MAAS deploys OS's with default user same as OS name
 cat <<EOF >~/k8s_env.sh
-k8s_key=$1
-k8s_nodes="$2"
-k8s_master=$3
-k8s_workers="$4"
-k8s_priv_net=$5
-k8s_pub_net=$6
-k8s_ceph_mode=$7
-k8s_ceph_dev=$8
-export k8s_key
+k8s_nodes="$1"
+k8s_user=$2
+k8s_key=$3
+k8s_master=$4
+k8s_workers="$5"
+k8s_priv_net=$6
+k8s_pub_net=$7
+k8s_ceph_mode=$8
+k8s_ceph_dev=$9
 export k8s_nodes
+export k8s_user
+export k8s_key
 export k8s_master
 export k8s_workers
 export k8s_priv_net
@@ -89,17 +92,17 @@ EOF
 source ~/k8s_env.sh
 env | grep k8s_
 
-source ~/models/tools/maas/deploy.sh $k8s_key "$k8s_nodes" $extras
+source ~/models/tools/maas/deploy.sh $k8s_user $k8s_key "$k8s_nodes" $extras
 eval `ssh-agent`
 ssh-add $k8s_key
 scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_key \
-  ubuntu@$k8s_master:/home/ubuntu/$k8s_key
+  $k8s_user@$k8s_master:/home/$k8s_user/$k8s_key
 scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ~/k8s_env.sh \
-  ubuntu@$k8s_master:/home/ubuntu/.
+  $k8s_user@$k8s_master:/home/$k8s_user/.
 
 echo; echo "$0 $(date): Setting up kubernetes master..."
 scp -r -o UserKnownHostsFile=/dev/null  -o StrictHostKeyChecking=no \
-  ~/models/tools/kubernetes/* ubuntu@$k8s_master:/home/ubuntu/.
+  ~/models/tools/kubernetes/* $k8s_user@$k8s_master:/home/$k8s_user/.
 run_master "bash k8s-cluster.sh master"
 
 echo; echo "$0 $(date): Setting up kubernetes workers..."
@@ -120,12 +123,12 @@ run_master "bash k8s-cluster.sh demo start dokuwiki"
 
 echo; echo "Setting up Prometheus..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
-  ubuntu@$k8s_master:/home/ubuntu/.
+  $k8s_user@$k8s_master:/home/$k8s_user/.
 run_master "bash prometheus-tools.sh all \"$k8s_workers\""
 
 echo; echo "$0 $(date): Setting up cloudify..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/cloudify \
-  ubuntu@$k8s_master:/home/ubuntu/.
+  $k8s_user@$k8s_master:/home/$k8s_user/.
 run_master "bash cloudify/k8s-cloudify.sh prereqs"
 run_master "bash cloudify/k8s-cloudify.sh setup"
 
@@ -135,6 +138,7 @@ run "bash $HOME/models/tools/cloudify/k8s-cloudify.sh demo start"
 echo; echo "$0 $(date): Setting up VES"
 # not re-cloned if existing - allows patch testing locally
 if [[ ! -d ~/ves ]]; then
+  echo; echo "$0 $(date): Cloning VES"
   git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
 fi
 ves_influxdb_host=$k8s_master:8086
@@ -143,18 +147,18 @@ ves_grafana_host=$k8s_master:3000
 export ves_grafana_host
 ves_grafana_auth=admin:admin
 export ves_grafana_auth
-ves_kafka_hostname=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$k8s_master hostname)
+ves_kafka_hostname=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master hostname)
 export ves_kafka_hostname
 ves_loglevel=$ves_loglevel
 export ves_loglevel
 # Can't pass quoted strings in commands
 start=$((`date +%s`/60))
-bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_master "$k8s_workers"
-step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_master \"$k8s_workers\""
+bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master "$k8s_workers"
+step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master \"$k8s_workers\""
 
 echo; echo "$0 $(date): All done!"
-export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$k8s_master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
-export NODE_IP=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$k8s_master  kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
+export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
+export NODE_IP=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master  kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
 echo "Helm chart demo app dokuwiki is available at http://$NODE_IP:$NODE_PORT/"
 # TODO update Cloudify demo app to have public exposed service address
 port=$( bash ~/models/tools/cloudify/k8s-cloudify.sh port nginx $k8s_master)
