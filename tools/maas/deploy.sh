@@ -21,10 +21,11 @@
 #. - Password-less ssh key provided for node setup
 #. Usage: on the MAAS server
 #. $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
-#. $ source ~/models/tools/maas/demo_deploy.sh <key> "<hosts>" [<extras>]
+#. $ source ~/models/tools/maas/demo_deploy.sh <os> <key> "<hosts>" [<extras>]
+#. <os>: "xenial" (Ubtuntu Xenial) or "centos" (Centos 7)
 #. <key>: name of private key for cluster node ssh (in current folder)
 #. <hosts>: space separated list of hostnames managed by MAAS
-#. <extras>: optional name of script for extra setup functions as needed
+#. <extras>: optional name and parameters of script for extra setup functions
 
 function log() {
   f=$(caller 0 | awk '{print $2}')
@@ -57,7 +58,7 @@ function deploy_nodes() {
     log "Deploying node $node"
     id=$(maas opnfv machines read hostname=$node | jq -r '.[0].system_id')
     maas opnfv machines allocate system_id=$id
-    maas opnfv machine deploy $id
+    maas opnfv machine deploy $id distro_series=$os hwe_kernel=generic
   done
 }
 
@@ -68,9 +69,10 @@ function wait_nodes_status() {
   done
 }
 
-key=$1
-nodes="$2"
-extras=$3
+os=$1
+key=$2
+nodes="$3"
+extras="$4"
 
 release_nodes "$nodes"
 wait_nodes_status "$nodes" Ready
@@ -78,4 +80,4 @@ deploy_nodes "$nodes"
 wait_nodes_status "$nodes" Deployed
 eval `ssh-agent`
 ssh-add $key
-if [[ "x$extras" != "x" ]]; then source $extras; fi
+if [[ "x$extras" != "x" ]]; then source $extras $5 $6 $7 $8 $9; fi
