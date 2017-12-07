@@ -38,14 +38,14 @@ Here is an overview of the deployment process, which if desired can be completed
     * on each worker, deploy OPNFV Barometer collectd plugin
 * when done, these demo elements are available
   * Helm-deployed demo app dokuwiki, at the assigned node port on any k8s cluster node (e.g. http://$NODE_IP:$NODE_PORT)
-  * Cloudify-deployed demo app nginx at http://$k8s_master:$port
+  * Cloudify-deployed demo app nginx at http://$k8s_master:$(assigned node port)
   * Prometheus UI at http://$k8s_master:9090
-  * Grafana dashboards at http://$ves_grafana_host
-  * Grafana API at http://$ves_grafana_auth@$ves_grafana_host/api/v1/query?query=<string>
+  * Grafana dashboards at http://$ves_grafana_host:3000
+  * Grafana API at http://$ves_grafana_auth@$ves_grafana_host:3000/api/v1/query?query=<string>
   * Kubernetes API at https://$k8s_master:6443/api/v1/
   * Cloudify API at (example): curl -u admin:admin --header 'Tenant: default_tenant' http://$k8s_master/api/v3.1/status
 
-See comments in [setup script](k8s-cluster.sh) and other scripts in the for more info.
+See comments in [setup script](k8s-cluster.sh) and the other scripts for more info.
 
 This is a work in progress!
 
