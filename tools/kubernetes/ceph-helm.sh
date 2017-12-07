@@ -178,7 +178,7 @@ EOG
   for node in $nodes; do
     name=$(ssh -x -o StrictHostKeyChecking=no $USER@$node hostname)
     pod=$(kubectl get pods --namespace ceph | awk "/$name/{print \$1}")
-    while "$pod" == "" ; do
+    while [[ "$pod" == "" ]]; do
       log "ceph-osd pod not yet created at node $name, waiting 10 seconds"
       kubectl get pods --namespace ceph
       sleep 10
@@ -193,6 +193,7 @@ EOG
       status=$(kubectl get pods --namespace ceph $pod | awk "/$pod/ {print \$3}")
       kubectl get pods --namespace ceph
     done
+    log "$pod status is $status."
   done
 
   log "WORKAROUND take ownership of .kube"

@@ -165,6 +165,6 @@ port=$( bash ~/models/tools/cloudify/k8s-cloudify.sh port nginx $k8s_master)
 echo "Cloudify-deployed demo app nginx is available at http://$k8s_master:$port"
 echo "Prometheus UI is available at http://$k8s_master:9090"
 echo "Grafana dashboards are available at http://$ves_grafana_host (login as $ves_grafana_auth)"
-echo "Grafana API is available at http://$ves_grafana_auth@$ves_influx_host/api/v1/query?query=<string>"
+echo "Grafana API is available at http://$ves_grafana_auth@$ves_grafana_host/api/v1/query?query=<string>"
 echo "Kubernetes API is available at https://$k8s_master:6443/api/v1/"
 echo "Cloudify API access example: curl -u admin:admin --header 'Tenant: default_tenant' http://$k8s_master/api/v3.1/status"
