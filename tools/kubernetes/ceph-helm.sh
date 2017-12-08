@@ -71,7 +71,7 @@ priority=2
 gpgcheck=1
 gpgkey=https://download.ceph.com/keys/release.asc
 EOF
-  # TODO: find out why package us unsigned and thus need --nogpgcheck
+  # TODO: find out why package is unsigned and thus need --nogpgcheck
   sudo rpm --import 'https://download.ceph.com/keys/release.asc'
   sudo yum install --nogpgcheck -y ceph ceph-common
 fi

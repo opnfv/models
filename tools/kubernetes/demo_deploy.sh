@@ -33,7 +33,8 @@
 #. <os>: OS to deploy, one of "ubuntu" (Xenial) or "centos" (Centos 7)
 #. <key>: name of private key for cluster node ssh (in current folder)
 #. <master>: IP of cluster master node
-#. <workers>: space separated list of worker node IPs
+#. <workers>: space separated list of worker node IPs; OR for a single-node
+#.            (all-in-one) cluster, provide the master IP as the single worker.
 #. <pub-net>: CID formatted public network
 #. <priv-net>: CIDR formatted private network (may be same as pub-net)
 #. <ceph-mode>: "helm" or "baremetal"
@@ -105,8 +106,13 @@ scp -r -o UserKnownHostsFile=/dev/null  -o StrictHostKeyChecking=no \
   ~/models/tools/kubernetes/* $k8s_user@$k8s_master:/home/$k8s_user/.
 run_master "bash k8s-cluster.sh master"
 
-echo; echo "$0 $(date): Setting up kubernetes workers..."
-run_master "bash k8s-cluster.sh workers \"$k8s_workers\""
+if [[ "$k8s_master" != "$k8s_workers" ]]; then
+  echo; echo "$0 $(date): Setting up kubernetes workers..."
+  run_master "bash k8s-cluster.sh workers \"$k8s_workers\""
+else
+  echo; echo "Enable pod scheduling on master node"
+  run_master "kubectl taint node $k8s_nodes node-role.kubernetes.io/master:NoSchedule-"
+fi
 
 echo; echo "$0 $(date): Setting up helm..."
 run_master "bash k8s-cluster.sh helm"
@@ -115,11 +121,15 @@ echo; echo "$0 $(date): Verifying kubernetes+helm install..."
 run_master "bash k8s-cluster.sh demo start nginx"
 run_master "bash k8s-cluster.sh demo stop nginx"
 
-echo; echo "$0 $(date): Setting up ceph-helm"
-run_master "bash k8s-cluster.sh ceph \"$k8s_workers\" $k8s_priv_net $k8s_pub_net $k8s_ceph_mode $k8s_ceph_dev"
+if [[ "$k8s_master" != "$k8s_workers" ]]; then
+  echo; echo "$0 $(date): Setting up ceph-helm"
+  run_master "bash k8s-cluster.sh ceph \"$k8s_workers\" $k8s_priv_net $k8s_pub_net $k8s_ceph_mode $k8s_ceph_dev"
 
-echo; echo "$0 $(date): Verifying kubernetes+helm+ceph install..."
-run_master "bash k8s-cluster.sh demo start dokuwiki"
+  echo; echo "$0 $(date): Verifying kubernetes+helm+ceph install..."
+  run_master "bash k8s-cluster.sh demo start dokuwiki"
+else
+  echo; echo "$0 $(date): Skipping ceph (not yet working for AIO deployment)"
+fi
 
 echo; echo "Setting up Prometheus..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
@@ -157,14 +167,15 @@ bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master "$k8s_workers
 step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master \"$k8s_workers\""
 
 echo; echo "$0 $(date): All done!"
-export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
-export NODE_IP=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master  kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
-echo "Helm chart demo app dokuwiki is available at http://$NODE_IP:$NODE_PORT/"
-# TODO update Cloudify demo app to have public exposed service address
+if [[ "$k8s_master" != "$k8s_workers" ]]; then
+  export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
+  export NODE_IP=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master  kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo "Helm chart demo app dokuwiki is available at http://$NODE_IP:$NODE_PORT/"
+fi
 port=$( bash ~/models/tools/cloudify/k8s-cloudify.sh port nginx $k8s_master)
 echo "Cloudify-deployed demo app nginx is available at http://$k8s_master:$port"
 echo "Prometheus UI is available at http://$k8s_master:9090"
-echo "Grafana dashboards are available at http://$ves_grafana_host:3000 (login as $ves_grafana_auth)"
-echo "Grafana API is available at http://$ves_grafana_auth@$ves_grafana_host:3000/api/v1/query?query=<string>"
+echo "Grafana dashboards are available at http://$ves_grafana_host (login as $ves_grafana_auth)"
+echo "Grafana API is available at http://$ves_grafana_auth@$ves_grafana_host/api/v1/query?query=<string>"
 echo "Kubernetes API is available at https://$k8s_master:6443/api/v1/"
 echo "Cloudify API access example: curl -u admin:admin --header 'Tenant: default_tenant' http://$k8s_master/api/v3.1/status"

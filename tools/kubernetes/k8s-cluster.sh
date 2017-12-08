@@ -118,6 +118,7 @@ EOF
   sudo ufw disable
 else
   echo; echo "prereqs.sh: ($(date)) Basic prerequisites"
+  sudo yum install -y epel-release
   sudo yum update -y
   sudo yum install -y wget git
   echo; echo "prereqs.sh: ($(date)) Install latest docker"
