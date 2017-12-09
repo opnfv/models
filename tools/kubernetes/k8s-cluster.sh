@@ -27,13 +27,14 @@
 #. $ bash k8s-cluster.sh helm
 #.     Setup helm as kubernetes app management tool. Note this is a
 #.     prerequisite for selecting "helm" ceph-mode as described below.
-#. $ bash k8s-cluster.sh ceph "<nodes>" <cluster-net> <public-net> <ceph-mode> [ceph_dev]
+#. $ bash k8s-cluster.sh ceph "<nodes>" <cluster-net> <public-net> <ceph-mode> "<ceph_dev>"
 #.     nodes: space-separated list of ceph node IPs
 #.     cluster-net: CIDR of ceph cluster network e.g. 10.0.0.1/24
 #.     public-net: CIDR of public network
 #.     ceph-mode: "helm" or "baremetal"
-#.     ceph_dev: disk to use for ceph. ***MUST NOT BE USED FOR ANY OTHER PURPOSE***
-#.               if not provided, ceph data will be stored on osd nodes in /ceph
+#.     ceph-dev: space-separated list of disks (e.g. sda, sdb) to use on each
+#.               worker, or folder (e.g. "/ceph")
+#.               NOTE: ***DISK MUST NOT BE USED FOR ANY OTHER PURPOSE***
 #. $ bash k8s-cluster.sh all "<nodes>" <cluster-net> <public-net> <ceph-mode> [ceph_dev]
 #.     Runs all the steps above, including starting dokuwiki demo app.
 #. $ bash k8s-cluster.sh demo <start|stop> <chart>
@@ -281,9 +282,9 @@ EOF
 
 function setup_ceph() {
   if [[ "$4" == "helm" ]]; then
-    source ./ceph-helm.sh "$1" $2 $3 $5
+    source ./ceph-helm.sh "$1" $2 $3 "$5"
   else
-    source ./ceph-baremetal.sh "$1" $2 $3 $5
+    source ./ceph-baremetal.sh "$1" $2 $3 "$5"
   fi
 }
 
@@ -304,7 +305,7 @@ case "$1" in
     setup_k8s_workers "$2"
     ;;
   ceph)
-    setup_ceph "$2" $3 $4 $5 $6
+    setup_ceph "$2" $3 $4 $5 "$6"
     ;;
   helm)
     bash ./helm-tools.sh setup

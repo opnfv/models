@@ -28,7 +28,7 @@
 #. Usage: on the MAAS server
 #. $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
 #. $ bash ~/models/tools/kubernetes/demo_deploy.sh "<hosts>" <os> <key>
-#.   <master> "<workers>" <pub-net> <priv-net> <ceph-mode> <ceph-dev> [<extras>]
+#.   <master> "<workers>" <pub-net> <priv-net> <ceph-mode> "<ceph-dev>" [<extras>]
 #. <hosts>: space separated list of hostnames managed by MAAS
 #. <os>: OS to deploy, one of "ubuntu" (Xenial) or "centos" (Centos 7)
 #. <key>: name of private key for cluster node ssh (in current folder)
@@ -38,7 +38,8 @@
 #. <pub-net>: CID formatted public network
 #. <priv-net>: CIDR formatted private network (may be same as pub-net)
 #. <ceph-mode>: "helm" or "baremetal"
-#. <ceph-dev>: disk (e.g. sda, sdb) or folder (e.g. "/ceph")
+#. <ceph-dev>: space-separated list of disks (e.g. sda, sdb) to use on each
+#.             worker, or folder (e.g. "/ceph")
 #. <extras>: optional name of script for extra setup functions as needed
 #.
 #. See tools/demo_deploy.sh in the OPNFV VES repo for additional environment
@@ -79,7 +80,7 @@ k8s_workers="$5"
 k8s_priv_net=$6
 k8s_pub_net=$7
 k8s_ceph_mode=$8
-k8s_ceph_dev=$9
+k8s_ceph_dev="$9"
 export k8s_nodes
 export k8s_user
 export k8s_key
@@ -123,7 +124,7 @@ run_master "bash k8s-cluster.sh demo stop nginx"
 
 if [[ "$k8s_master" != "$k8s_workers" ]]; then
   echo; echo "$0 $(date): Setting up ceph-helm"
-  run_master "bash k8s-cluster.sh ceph \"$k8s_workers\" $k8s_priv_net $k8s_pub_net $k8s_ceph_mode $k8s_ceph_dev"
+  run_master "bash k8s-cluster.sh ceph \"$k8s_workers\" $k8s_priv_net $k8s_pub_net $k8s_ceph_mode \"$k8s_ceph_dev\""
 
   echo; echo "$0 $(date): Verifying kubernetes+helm+ceph install..."
   run_master "bash k8s-cluster.sh demo start dokuwiki"

@@ -20,13 +20,14 @@
 #. - key-based auth setup for ssh/scp between master and agent nodes
 #. - 192.168.0.0/16 should not be used on your server network interface subnets
 #. Usage:
-#  Intended to be called from k8s-cluster.sh in this folder. To run directly:
-#. $ bash ceph-helm.sh "<nodes>" <cluster-net> <public-net> [ceph_dev]
+#. Intended to be called from k8s-cluster.sh in this folder. To run directly:
+#. $ bash ceph-helm.sh "<nodes>" <cluster-net> <public-net> "<ceph_dev>"
 #.     nodes: space-separated list of ceph node IPs
 #.     cluster-net: CIDR of ceph cluster network e.g. 10.0.0.1/24
 #.     public-net: CIDR of public network
-#.     ceph_dev: disk to use for ceph. ***MUST NOT BE USED FOR ANY OTHER PURPOSE***
-#.               if not provided, ceph data will be stored on osd nodes in /ceph
+#.     ceph-dev: space-separated list of disks (e.g. sda, sdb) to use on each
+#.               worker
+#.               NOTE: ***DISK MUST NOT BE USED FOR ANY OTHER PURPOSE***
 #.
 #. Status: work in progress, incomplete
 #
@@ -79,10 +80,10 @@ EOG
 }
 
 function setup_ceph() {
-  nodes=$1
+  nodes="$1"
   private_net=$2
   public_net=$3
-  dev=$4
+  dev="$4"
 
   log "Install ceph and ceph-common"
   make_ceph_setup
@@ -145,8 +146,10 @@ EOF
   log "ceph status is 'HEALTH_OK'"
   kubectl -n ceph exec -it ceph-mon-0 -- ceph -s
 
+  i=1
   for node in $nodes; do
-    log "install ceph, setup resolv.conf, zap disk for $node"
+    disk=$(echo "$dev" | cut -d ' ' -f $i)
+    log "install ceph, setup resolv.conf, zap disk $disk for $node"
     if [[ "$dist" == "ubuntu" ]]; then
       ssh -x -o StrictHostKeyChecking=no $USER@$node \
         sudo apt-get install -y ceph ceph-common
@@ -163,7 +166,7 @@ nameserver $kubedns
 search ceph.svc.cluster.local svc.cluster.local cluster.local
 options ndots:5
 EOF
-sudo ceph-disk zap /dev/$dev
+sudo ceph-disk zap /dev/$disk
 EOG
     log "Run ceph-osd at $node"
     name=$(ssh -x -o StrictHostKeyChecking=no $USER@$node hostname)
@@ -172,7 +175,7 @@ EOG
     # TODO: leave out sudo... resulted in "./helm-install-ceph-osd.sh: line 40: helm: command not found"
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
       $USER@$node sudo chmod 777 /var/lib/ceph/tmp
-    ./helm-install-ceph-osd.sh $name /dev/$dev
+    ./helm-install-ceph-osd.sh $name /dev/$disk
   done
 
   for node in $nodes; do
@@ -245,7 +248,7 @@ EOG
 }
 
 if [[ "$1" != "" ]]; then
-  setup_ceph "$1" $2 $3 $4
+  setup_ceph "$1" $2 $3 "$4"
 else
   grep '#. ' $0
 fi
