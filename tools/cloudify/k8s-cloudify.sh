@@ -21,17 +21,20 @@
 #. Usage:
 #.   From a server with access to the kubernetes master node:
 #.   $ cd ~/models/tools/cloudify
-#.   $ scp -r ~/models/tools/* ubuntu@<k8s-master>:/home/ubuntu/.
+#.   $ scp -r ~/models/tools/* <user>@<k8s-master>:/home/<user>/.
+#.     <user>: username on the target host. Also used to indicate OS name.
 #.     <k8s-master>: IP or hostname of kubernetes master server
-#.   $ ssh -x ubuntu@<k8s-master> cloudify/k8s-cloudify.sh prereqs
-#.     prereqs: installs prerequisites and configures ubuntu user for kvm use
-#.   $ ssh -x ubuntu@<k8s-master> bash cloudify/k8s-cloudify.sh setup
+#.   $ ssh -x <user>@<k8s-master> cloudify/k8s-cloudify.sh prereqs
+#.     <user>: username on the target host. Also used to indicate OS name.
+#.     prereqs: installs prerequisites and configures <user> user for kvm use
+#.   $ ssh -x <user>@<k8s-master> bash cloudify/k8s-cloudify.sh setup
+#.     <user>: username on the target host. Also used to indicate OS name.
 #.     setup: installs cloudify CLI and Manager
 #.   $ bash k8s-cloudify.sh demo <start|stop>
 #.     demo: control demo blueprint
 #.     start|stop: start or stop the demo
 #.     <k8s-master>: IP or hostname of kubernetes master server
-#.   $ bash k8s-cloudify.sh <start|stop> <name> <blueprint> <k8s-master>
+#.   $ bash k8s-cloudify.sh <start|stop> <name> <blueprint>
 #.     start|stop: start or stop the blueprint
 #.     name: name of the service in the blueprint
 #.     blueprint: name of the blueprint folder (in current directory!)
@@ -40,7 +43,8 @@
 #.     port: find assigned node_port for service
 #.     service: name of service e.g. nginx
 #.     <k8s-master>: IP or hostname of kubernetes master server
-#.   $ ssh -x ubuntu@<k8s-master> bash cloudify/k8s-cloudify.sh clean
+#.   $ ssh -x <user>@<k8s-master> bash cloudify/k8s-cloudify.sh clean
+#.     <user>: username on the target host. Also used to indicate OS name.
 #.     clean: uninstalls cloudify CLI and Manager
 
 #. Status: this is a work in progress, under test.
@@ -58,8 +62,17 @@ function log() {
 
 function prereqs() {
   log "Install prerequisites"
-  sudo apt-get install -y virtinst qemu-kvm libguestfs-tools virtualenv git \
-    python-pip
+  if [[ "$USER" == "ubuntu" ]]; then
+    sudo apt-get install -y virtinst qemu-kvm libguestfs-tools virtualenv git \
+      python-pip
+  else
+    # installing libvirt is needed to ensure default network is pre-created
+    sudo yum install -y libvirt 
+    sudo virsh net-define /usr/share/libvirt/networks/default.xml
+    sudo yum install -y virt-install
+    sudo yum install -y qemu-kvm libguestfs-tools git python-pip
+    sudo pip install virtualenv
+  fi
   log "Setup $USER for kvm use"
   # Per http://libguestfs.org/guestfs-faq.1.html
   # workaround for virt-customize warning: libguestfs: warning: current user is not a member of the KVM group (group ID 121). This user cannot access /dev/kvm, so libguestfs may run very slowly. It is recommended that you 'chmod 0666 /dev/kvm' or add the current user to the KVM group (you might need to log out and log in again).
@@ -67,16 +80,20 @@ function prereqs() {
   # also to avoid permission denied errors in guestfish, from http://manpages.ubuntu.com/manpages/zesty/man1/guestfs-faq.1.html
   sudo usermod -a -G kvm $USER
   sudo chmod 0644 /boot/vmlinuz*
-  log "Clone repo"
 }
 
 function setup () {
   cd ~/cloudify
   log "Setup Cloudify-CLI"
   # Per http://docs.getcloudify.org/4.1.0/installation/bootstrapping/#installing-cloudify-manager-in-an-offline-environment
-  wget -q http://repository.cloudifysource.org/cloudify/17.9.21/community-release/cloudify-cli-community-17.9.21.deb
   # Installs into /opt/cfy/
-  sudo dpkg -i cloudify-cli-community-17.9.21.deb
+  if [[ "$k8s_user" == "ubuntu" ]]; then
+    wget -q http://repository.cloudifysource.org/cloudify/17.9.21/community-release/cloudify-cli-community-17.9.21.deb
+    sudo dpkg -i cloudify-cli-community-17.9.21.deb
+  else
+    wget -q http://repository.cloudifysource.org/cloudify/17.11.12/community-release/cloudify-cli-community-17.11.12.rpm
+    sudo rpm -i cloudify-cli-community-17.11.12.rpm
+  fi
   export MANAGER_BLUEPRINTS_DIR=/opt/cfy/cloudify-manager-blueprints
   virtualenv ~/cloudify/env
   source ~/cloudify/env/bin/activate
@@ -84,11 +101,16 @@ function setup () {
   log "Setup Cloudify-Manager"
   # to start over
   # sudo virsh destroy cloudify-manager; sudo virsh undefine cloudify-manager
-  wget -q http://repository.cloudifysource.org/cloudify/17.9.21/community-release/cloudify-manager-community-17.9.21.qcow2
-  # nohup and redirection of output is a workaround for some issue with virt-install never outputting anything beyond "Creadint domain..." and thus not allowing the script to continue.
-  nohup virt-install --connect qemu:///system --virt-type kvm \
+  # centos: putting image in /tmp ensures qemu user can access it
+  wget -q http://repository.cloudifysource.org/cloudify/17.9.21/community-release/cloudify-manager-community-17.9.21.qcow2 \
+    -O /tmp/cloudify-manager-community-17.9.21.qcow2
+  # TODO: centos needs this, else "ERROR    Failed to connect socket to '/var/run/libvirt/libvirt-sock': No such file or directory"
+  sudo systemctl start libvirtd
+  # TODO: centos needs sudo, else "ERROR    authentication unavailable: no polkit agent available to authenticate action 'org.libvirt.unix.manage'"
+  # TODO: nohup and redirection of output needed else virt-install never outputs anything beyond "Creating domain..." and thus not allowing the script to continue.
+  nohup sudo virt-install --connect qemu:///system --virt-type kvm \
     --name cloudify-manager --vcpus 4 --memory 16192 \
-    --disk cloudify-manager-community-17.9.21.qcow2 --import \
+    --disk /tmp/cloudify-manager-community-17.9.21.qcow2 --import \
     --network network=default --os-type=linux  \
     --os-variant=rhel7 > /dev/null 2>&1 &
 
@@ -98,7 +120,7 @@ function setup () {
     log "$n minutes so far; waiting 60 seconds for cloudify-manager IP to be assigned"
     sleep 60
     ((n++))
-    VM_MAC=$(virsh domiflist cloudify-manager | grep default | grep -Eo "[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+")
+    VM_MAC=$(sudo virsh domiflist cloudify-manager | grep default | grep -Eo "[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+")
     VM_IP=$(/usr/sbin/arp -e | grep ${VM_MAC} | awk {'print $1'})
   done
   log "cloudify-manager IP=$VM_IP"
@@ -111,7 +133,7 @@ function setup () {
   log "Install Cloudify Kubernetes Plugin"
   # Per http://docs.getcloudify.org/4.1.0/plugins/container-support/
   # Per https://github.com/cloudify-incubator/cloudify-kubernetes-plugin
-  pip install kubernetes wagon
+  pip install wagon
   # From https://github.com/cloudify-incubator/cloudify-kubernetes-plugin/releases
   wget -q https://github.com/cloudify-incubator/cloudify-kubernetes-plugin/releases/download/1.2.1/cloudify_kubernetes_plugin-1.2.1-py27-none-linux_x86_64-centos-Core.wgn
   # For Cloudify-CLI per http://docs.getcloudify.org/4.1.0/plugins/using-plugins/
@@ -190,7 +212,7 @@ function start() {
   log "start app $name with blueprint $bp"
   log "copy kube config from k8s master for insertion into blueprint"
   scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    ubuntu@$manager_ip:/home/ubuntu/.kube/config $bp/kube.config
+    $k8s_user@$manager_ip:/home/$k8s_user/.kube/config $bp/kube.config
 
     log "package the blueprint"
     # CLI: cfy blueprints package -o /tmp/$bp $bp
@@ -324,7 +346,7 @@ function stop() {
   if [[ "$error" != "not_found_error" ]]; then
      log "force delete deployment via cfy CLI"
      ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-       ubuntu@$manager_ip cfy deployment delete -f \
+       $k8s_user@$manager_ip cfy deployment delete -f \
        -t default_tenant $bp
      error=$(curl -s -u admin:admin --header 'Tenant: default_tenant' \
      http://$manager_ip/api/v3.1/deployments/$bp | jq -r '.error_code')

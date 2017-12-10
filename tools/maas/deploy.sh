@@ -28,6 +28,11 @@
 #. <hosts>: space separated list of hostnames managed by MAAS
 #. <extras>: optional name and parameters of script for extra setup functions
 
+function fail() {
+  log "$1"
+  exit 1
+}
+
 function log() {
   f=$(caller 0 | awk '{print $2}')
   l=$(caller 0 | awk '{print $1}')
@@ -38,6 +43,9 @@ function wait_node_status() {
   status=$(maas opnfv machines read hostname=$1 | jq -r ".[0].status_name")
   while [[ "x$status" != "x$2" ]]; do
     log "$1 status is $status ... waiting for it to be $2"
+    if [[ "$2" == "Deployed" && "$status" == "Failed deployment" ]]; then
+      fail "$1 deployment failed"
+    fi
     sleep 30
     status=$(maas opnfv machines read hostname=$1 | jq -r ".[0].status_name")
   done

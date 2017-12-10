@@ -232,6 +232,9 @@ sudo kubeadm reset
 sudo $k8s_joincmd
 EOF
 
+# process below is serial for now; when workers are deployed in parallel,
+# sometimes calico seems to be incompletely setup at some workers. symptoms
+# similar to as noted for the "wait for calico" steps above.
   for worker in $workers; do
     host=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $USER@$worker hostname)
     log "Install worker at $worker hostname $host"
@@ -247,10 +250,7 @@ EOF
       start_worker.sh $USER@$worker:/home/$USER/.
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
       $USER@$worker bash start_worker.sh
-  done
 
-  for worker in $workers; do
-    host=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $USER@$worker hostname)
     log "checking that node $host is 'Ready'"
     status=$(kubectl get nodes | awk "/$host/ {print \$2}")
     while [[ "$status" != "Ready" ]]; do
