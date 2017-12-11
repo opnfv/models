@@ -78,8 +78,16 @@ function prereqs() {
   # workaround for virt-customize warning: libguestfs: warning: current user is not a member of the KVM group (group ID 121). This user cannot access /dev/kvm, so libguestfs may run very slowly. It is recommended that you 'chmod 0666 /dev/kvm' or add the current user to the KVM group (you might need to log out and log in again).
   # Also see: https://help.ubuntu.com/community/KVM/Installation
   # also to avoid permission denied errors in guestfish, from http://manpages.ubuntu.com/manpages/zesty/man1/guestfs-faq.1.html
+  sudo groupadd -g 7777 libvirt
+  sudo usermod -aG libvirt $USER
+  id $USER | grep libvirt
+  sudo tee -a /etc/libvirt/libvirtd.conf <<EOF
+unix_sock_group = "libvirt"
+unix_sock_rw_perms = "0770"
+EOF
   sudo usermod -a -G kvm $USER
   sudo chmod 0644 /boot/vmlinuz*
+  sudo systemctl restart libvirtd
 }
 
 function setup () {
@@ -100,27 +108,35 @@ function setup () {
 
   log "Setup Cloudify-Manager"
   # to start over
-  # sudo virsh destroy cloudify-manager; sudo virsh undefine cloudify-manager
+  # virsh destroy cloudify-manager; virsh undefine cloudify-manager
   # centos: putting image in /tmp ensures qemu user can access it
-  wget -q http://repository.cloudifysource.org/cloudify/17.9.21/community-release/cloudify-manager-community-17.9.21.qcow2 \
-    -O /tmp/cloudify-manager-community-17.9.21.qcow2
+  log "Download Cloudify-Manager image cloudify-manager-community-17.9.21.qcow2"
+  wget -q http://repository.cloudifysource.org/cloudify/17.9.21/community-release/cloudify-manager-community-17.9.21.qcow2
   # TODO: centos needs this, else "ERROR    Failed to connect socket to '/var/run/libvirt/libvirt-sock': No such file or directory"
   sudo systemctl start libvirtd
-  # TODO: centos needs sudo, else "ERROR    authentication unavailable: no polkit agent available to authenticate action 'org.libvirt.unix.manage'"
-  # TODO: nohup and redirection of output needed else virt-install never outputs anything beyond "Creating domain..." and thus not allowing the script to continue.
-  nohup sudo virt-install --connect qemu:///system --virt-type kvm \
+  if [[ "$USER" == "centos" ]]; then
+    # copy image to folder that qemu has access to, to avoid: ERROR    Cannot access storage file '/home/centos/cloudify/cloudify-manager-community-17.9.21.qcow2' (as uid:107, gid:107): Permission denied
+    cp cloudify-manager-community-17.9.21.qcow2 /tmp/.
+    img="/tmp/cloudify-manager-community-17.9.21.qcow2"
+  else
+    img="cloudify-manager-community-17.9.21.qcow2"
+  fi
+  # --noautoconsole is needed to avoid virt-install hanging
+  virt-install --connect qemu:///system --virt-type kvm \
     --name cloudify-manager --vcpus 4 --memory 16192 \
-    --disk /tmp/cloudify-manager-community-17.9.21.qcow2 --import \
+    --disk $img --import \
     --network network=default --os-type=linux  \
-    --os-variant=rhel7 > /dev/null 2>&1 &
+    --os-variant=rhel7 --noautoconsole
 
+  # TODO: centos requires sudo for some reason
+  if [[ "$USER" == "centos" ]]; then dosudo=sudo; fi
   VM_IP=""
   n=0
   while [[ "x$VM_IP" == "x" ]]; do
-    log "$n minutes so far; waiting 60 seconds for cloudify-manager IP to be assigned"
-    sleep 60
+    log "$n minutes so far; waiting 10 seconds for cloudify-manager IP to be assigned"
+    sleep 10
     ((n++))
-    VM_MAC=$(sudo virsh domiflist cloudify-manager | grep default | grep -Eo "[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+")
+    VM_MAC=$($dosudo virsh domiflist cloudify-manager | grep default | grep -Eo "[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+")
     VM_IP=$(/usr/sbin/arp -e | grep ${VM_MAC} | awk {'print $1'})
   done
   log "cloudify-manager IP=$VM_IP"
@@ -157,7 +173,7 @@ function setup () {
   cfy secrets list
 
   # get manager VM IP
-  VM_MAC=$(sudo virsh domiflist cloudify-manager | grep default | grep -Eo "[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+")
+  VM_MAC=$(virsh domiflist cloudify-manager | grep default | grep -Eo "[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+")
   VM_IP=$(/usr/sbin/arp -e | grep ${VM_MAC} | awk {'print $1'})
 
   # get host IP
