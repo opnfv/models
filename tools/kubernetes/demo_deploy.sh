@@ -42,6 +42,10 @@
 #.             worker, or folder (e.g. "/ceph")
 #. <extras>: optional name of script for extra setup functions as needed
 #.
+#. The script will create a k8s environment setup file specific to the master
+#. hostname, e.g. k8s_env_k8s-1.sh. This allows multiple deploys to be invoked
+#. from the same admin server, by 
+#.
 #. See tools/demo_deploy.sh in the OPNFV VES repo for additional environment
 #. variables (mandatory/optional) for VES
 
@@ -70,12 +74,17 @@ EOF
 
 extras=${10}
 
-# Note MAAS deploys OS's with default user same as OS name
-cat <<EOF >~/k8s_env.sh
+if [[ "$4" != "$5" ]]; then
+  k8s_master_host=$(echo $1 | cut -d ' ' -f 1)
+else
+  k8s_master_host=$1
+fi
+cat <<EOF >~/k8s_env_$k8s_master_host.sh
 k8s_nodes="$1"
 k8s_user=$2
 k8s_key=$3
 k8s_master=$4
+k8s_master_host=$k8s_master_host
 k8s_workers="$5"
 k8s_priv_net=$6
 k8s_pub_net=$7
@@ -85,13 +94,14 @@ export k8s_nodes
 export k8s_user
 export k8s_key
 export k8s_master
+export k8s_master_host
 export k8s_workers
 export k8s_priv_net
 export k8s_pub_net
 export k8s_ceph_mode
 export k8s_ceph_dev
 EOF
-source ~/k8s_env.sh
+source ~/k8s_env_$k8s_master_host.sh
 env | grep k8s_
 
 source ~/models/tools/maas/deploy.sh $k8s_user $k8s_key "$k8s_nodes" $extras
@@ -99,8 +109,8 @@ eval `ssh-agent`
 ssh-add $k8s_key
 scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_key \
   $k8s_user@$k8s_master:/home/$k8s_user/$k8s_key
-scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ~/k8s_env.sh \
-  $k8s_user@$k8s_master:/home/$k8s_user/.
+scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+  ~/k8s_env_$k8s_master_host.sh $k8s_user@$k8s_master:/home/$k8s_user/k8s_env.sh
 
 echo; echo "$0 $(date): Setting up kubernetes master..."
 scp -r -o UserKnownHostsFile=/dev/null  -o StrictHostKeyChecking=no \
@@ -168,16 +178,16 @@ bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master "$k8s_workers
 step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master \"$k8s_workers\""
 
 echo; echo "$0 $(date): All done!"
-if [[ "$k8s_master" != "$k8s_workers" ]]; then
-  export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
-  export NODE_IP=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master  kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
-  echo "Helm chart demo app dokuwiki is available at http://$NODE_IP:$NODE_PORT/"
-fi
-port=$( bash ~/models/tools/cloudify/k8s-cloudify.sh port nginx $k8s_master)
-echo "Cloudify-deployed demo app nginx is available at http://$k8s_master:$port"
+port=$(bash ~/models/tools/cloudify/k8s-cloudify.sh port nginx)
 echo "Prometheus UI is available at http://$k8s_master:9090"
 echo "InfluxDB API is available at http://$ves_influxdb_host/query&db=veseventsdb&q=<string>"
 echo "Grafana dashboards are available at http://$ves_grafana_host (login as $ves_grafana_auth)"
 echo "Grafana API is available at http://$ves_grafana_auth@$ves_grafana_host/api/v1/query?query=<string>"
 echo "Kubernetes API is available at https://$k8s_master:6443/api/v1/"
 echo "Cloudify API access example: curl -u admin:admin --header 'Tenant: default_tenant' http://$k8s_master/api/v3.1/status"
+echo "Cloudify-deployed demo app nginx is available at http://$k8s_master:$port"
+if [[ "$k8s_master" != "$k8s_workers" ]]; then
+  export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
+  export NODE_IP=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo "Helm chart demo app dokuwiki is available at http://$NODE_IP:$NODE_PORT/"
+fi

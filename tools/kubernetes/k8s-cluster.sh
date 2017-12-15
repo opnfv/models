@@ -63,6 +63,13 @@ function setup_prereqs() {
   cat <<'EOG' >~/prereqs.sh
 #!/bin/bash
 # Basic server pre-reqs
+function wait_dpkg() {
+  # TODO: workaround for "E: Could not get lock /var/lib/dpkg/lock - open (11: Resource temporarily unavailable)"
+  echo; echo "waiting for dpkg to be unlocked"
+  while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/lock >/dev/null 2>&1; do
+    sleep 1
+  done
+}
 dist=$(grep --m 1 ID /etc/os-release | awk -F '=' '{print $2}' | sed 's/"//g')
 if [[ $(grep -c $HOSTNAME /etc/hosts) -eq 0 ]]; then
   echo; echo "prereqs.sh: ($(date)) Add $HOSTNAME to /etc/hosts"
@@ -73,10 +80,11 @@ fi
 if [[ "$dist" == "ubuntu" ]]; then
   # Per https://kubernetes.io/docs/setup/independent/install-kubeadm/
   echo; echo "prereqs.sh: ($(date)) Basic prerequisites"
-  sudo apt-get update
-  sudo apt-get upgrade -y
+
+  wait_dpkg; sudo apt-get update
+  wait_dpkg; sudo apt-get upgrade -y
   echo; echo "prereqs.sh: ($(date)) Install latest docker"
-  sudo apt-get install -y docker.io
+  wait_dpkg; sudo apt-get install -y docker.io
   # Alternate for 1.12.6
   #sudo apt-get install -y libltdl7
   #wget https://packages.docker.com/1.12/apt/repo/pool/main/d/docker-engine/docker-engine_1.12.6~cs8-0~ubuntu-xenial_amd64.deb

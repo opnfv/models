@@ -18,6 +18,8 @@
 #.   git clone https://gerrit.opnfv.org/gerrit/models ~/models
 #. - Kubernetes cluster installed per tools/kubernetes/demo_deploy.sh and
 #.   environment setup file ~/models/tools/k8s_env.sh as setup by demo_deploy.sh
+#. - Kubernetes environment variables set per the k8s_env_*.sh created by
+#.   the demo_deploy.sh script (* is the hostname of the k8s master node).
 #. Usage:
 #.   From a server with access to the kubernetes master node:
 #.   $ cd ~/models/tools/cloudify
@@ -46,7 +48,13 @@
 #.   $ ssh -x <user>@<k8s-master> bash cloudify/k8s-cloudify.sh clean
 #.     <user>: username on the target host. Also used to indicate OS name.
 #.     clean: uninstalls cloudify CLI and Manager
-
+#.
+#. If using this script to start/stop blueprints with multiple k8s environments,
+#. before invoking the script copy the k8s_env.sh script from the target
+#. cluster and copy to ~/k8s_env.sh, e.g.
+#.   scp centos@sm-1:/home/centos/k8s_env.sh ~/k8s_env_sm-1.sh
+#.   cp ~/k8s_env_sm-1.sh ~/k8s_env.sh
+#.
 #. Status: this is a work in progress, under test.
 
 function fail() {
@@ -92,6 +100,8 @@ EOF
 
 function setup () {
   cd ~/cloudify
+  source ~/k8s_env.sh
+  manager_ip=$k8s_master
   log "Setup Cloudify-CLI"
   # Per http://docs.getcloudify.org/4.1.0/installation/bootstrapping/#installing-cloudify-manager-in-an-offline-environment
   # Installs into /opt/cfy/
@@ -199,6 +209,9 @@ function setup () {
 
 function service_port() {
   name=$1
+  manager_ip=$k8s_master
+  log "getting node port for service $name at manager $manager_ip"
+
   tries=6
   port="null"
   while [[ "$port" == "null" && $tries -gt 0 ]]; do
@@ -225,6 +238,8 @@ function service_port() {
 function start() {
   name=$1
   bp=$2
+  manager_ip=$k8s_master
+
   log "start app $name with blueprint $bp"
   log "copy kube config from k8s master for insertion into blueprint"
   scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
@@ -236,46 +251,66 @@ function start() {
 
     log "upload the blueprint"
     # CLI: cfy blueprints upload -t default_tenant -b $bp /tmp/$bp.tar.gz
-    curl -s -X PUT -u admin:admin --header 'Tenant: default_tenant' \
-      --header "Content-Type: application/octet-stream" -o /tmp/json \
+    resp=$(curl -X PUT -s -w "%{http_code}" -o /tmp/json \
+      -u admin:admin --header 'Tenant: default_tenant' \
+      --header "Content-Type: application/octet-stream" \
       http://$manager_ip/api/v3.1/blueprints/$bp?application_file_name=blueprint.yaml \
-      -T /tmp/blueprint.tar
+      -T /tmp/blueprint.tar)
+    if [[ "$resp" != "201" ]]; then
+      log "Response: $resp"
+      cat /tmp/json
+      fail "upload failed, response $resp"
+    fi
 
     log "create a deployment for the blueprint"
     # CLI: cfy deployments create -t default_tenant -b $bp $bp
-    curl -s -X PUT -u admin:admin --header 'Tenant: default_tenant' \
-      --header "Content-Type: application/json" -o /tmp/json \
+    resp=$(curl -X PUT -s -w "%{http_code}" -o /tmp/json \
+      -u admin:admin --header 'Tenant: default_tenant' \
+      -w "\nResponse: %{http_code}\n" \
+      --header "Content-Type: application/json" \
       -d "{\"blueprint_id\": \"$bp\"}" \
-      http://$manager_ip/api/v3.1/deployments/$bp
+      http://$manager_ip/api/v3.1/deployments/$bp)
+    # response code comes back as "\nResponse: <code>"
+    resp=$(echo $resp | awk '/Response/ {print $2}')
+    if [[ "$resp" != "201" ]]; then
+      log "Response: $resp"
+      cat /tmp/json
+      fail "deployment failed, response $resp"
+    fi
     sleep 10
 
     # CLI: cfy workflows list -d $bp
 
     log "install the deployment pod and service"
     # CLI: cfy executions start install -d $bp
-    curl -s -X POST -u admin:admin --header 'Tenant: default_tenant' \
-      --header "Content-Type: application/json" -o /tmp/json \
+    resp=$(curl -X POST -s -w "%{http_code}" -o /tmp/json \
+      -u admin:admin --header 'Tenant: default_tenant' \
+      -w "\nResponse: %{http_code}\n" \
+      --header "Content-Type: application/json" \
       -d "{\"deployment_id\":\"$bp\", \"workflow_id\":\"install\"}" \
-      http://$manager_ip/api/v3.1/executions
+      http://$manager_ip/api/v3.1/executions)
+    # response code comes back as "\nResponse: <code>"
+    resp=$(echo $resp | awk '/Response/ {print $2}')
+    if [[ "$resp" != "201" ]]; then
+      log "Response: $resp"
+      cat /tmp/json
+      fail "install failed, response $resp"
+    fi
 
     log "get the service's assigned node_port"
     port=""
     service_port $name $manager_ip
 
     log "verify service is responding"
-    while ! curl -s http://$manager_ip:$port ; do
+    while ! curl -v http://$manager_ip:$port ; do
       log "$name service is not yet responding at http://$manager_ip:$port, waiting 10 seconds"
       sleep 10
     done
     log "service is active at http://$manager_ip:$port"
 }
 
-function stop() {
-  name=$1
-  bp=$2
-
-  # TODO: fix the need for this workaround
-  log "try to first cancel all current executions"
+function cancel_executions() {
+  log "cancelling all active executions"
   curl -s -u admin:admin --header 'Tenant: default_tenant' \
     -o /tmp/json http://$manager_ip/api/v3.1/executions
   i=0
@@ -301,7 +336,7 @@ function stop() {
       http://$manager_ip/api/v3.1/executions | jq -r '.items[].status')
     count=0
     for status in $exs; do
-      if [[ "$status" != "terminated" && "$status" != "cancelled" ]]; then
+      if [[ "$status" != "terminated" && "$status" != "cancelled" && "$status" != "failed" ]]; then
         ((count++))
       fi
     done
@@ -312,80 +347,118 @@ function stop() {
     echo "$exs"
     fail "running executions remain"
   fi
+}
+
+function verify_deleted() {
+  log "verifying the resource is deleted: $1"
+  status=""
+  if [[ -f /tmp/vfy ]]; then rm /tmp/vfy; fi
+  r=$(curl -s -o /tmp/vfy -u admin:admin --header 'Tenant: default_tenant' $1)
+  log "Response: $r"
+  cat /tmp/vfy
+  status=$(cat /tmp/vfy | jq -r '.error_code')
+}
+
+function stop() {
+  name=$1
+  bp=$2
+  manager_ip=$k8s_master
+
+  # TODO: fix the need for this workaround
+  log "try to first cancel all current executions"
+  cancel_executions
   # end workaround
 
   log "uninstall the service"
-  curl -s -X POST -u admin:admin --header 'Tenant: default_tenant' \
+  resp=$(curl -X POST -s -w "%{http_code}" -o /tmp/json \
+    -u admin:admin --header 'Tenant: default_tenant' \
     --header "Content-Type: application/json" \
     -d "{\"deployment_id\":\"$bp\", \"workflow_id\":\"uninstall\"}" \
-    -o /tmp/json http://$manager_ip/api/v3.1/executions
-  id=$(jq -r ".id" /tmp/json)
-  log "uninstall execution id = $id"
-  status=""
-  tries=1
-  while [[ "$status" != "terminated" && $tries -lt 10 ]]; do
-    sleep 30
-    curl -s -u admin:admin --header 'Tenant: default_tenant' \
-    -o /tmp/json http://$manager_ip/api/v3.1/executions/$id
-    status=$(jq -r ".status" /tmp/json)
-    log "try $tries of 10: execution $id is $status"      
-    ((tries++))
-  done
-  if [[ $tries == 11 ]]; then
+    http://$manager_ip/api/v3.1/executions)
+  log "Response: $resp"
+  if [[ "$resp" != "201" ]]; then
+    log "uninstall action was not accepted"
     cat /tmp/json
-    fail "uninstall execution did not complete"
   fi
-  curl -s -u admin:admin --header 'Tenant: default_tenant' \
-    http://$manager_ip/api/v3.1/executions/$id | jq
 
-  count=1
-  state=""
-  tries=6
-  while [[ "$state" != "deleted" && $tries -gt 0 ]]; do
-    sleep 10
+  id=$(jq -r ".id" /tmp/json)
+  if [[ "$id" != "null" ]]; then
+    log "wait for uninstall execution $id to be completed ('terminated')"
+    status=""
+    tries=1
+    while [[ "$status" != "terminated" && $tries -lt 10 ]]; do
+      sleep 30
+      curl -s -u admin:admin --header 'Tenant: default_tenant' \
+      -o /tmp/json http://$manager_ip/api/v3.1/executions/$id
+      status=$(jq -r ".status" /tmp/json)
+      log "try $tries of 10: execution $id is $status"      
+      ((tries++))
+    done
+    if [[ $tries == 11 ]]; then
+      cat /tmp/json
+      fail "uninstall execution did not complete"
+    fi
     curl -s -u admin:admin --header 'Tenant: default_tenant' \
-      -o /tmp/json http://$manager_ip/api/v3.1/node-instances
-    state=$(jq -r '.items[0].state' /tmp/json)
-    ((tries--))
-  done
-  if [[ "$state" != "deleted" ]]; then
-    jq -r '.items' /tmp/json
-    fail "node-instances delete failed"
-  fi
+      http://$manager_ip/api/v3.1/executions/$id | jq
 
-  log "delete the deployment"
-  curl -s -X DELETE -u admin:admin --header 'Tenant: default_tenant' \
-    -o /tmp/json  http://$manager_ip/api/v3.1/deployments/$bp
-  log "verify the deployment is deleted"
-  error=$(curl -s -u admin:admin --header 'Tenant: default_tenant' \
-    http://$manager_ip/api/v3.1/deployments/$bp | jq -r '.error_code')
-  if [[ "$error" != "not_found_error" ]]; then
-     log "force delete deployment via cfy CLI"
-     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-       $k8s_user@$manager_ip cfy deployment delete -f \
-       -t default_tenant $bp
-     error=$(curl -s -u admin:admin --header 'Tenant: default_tenant' \
-     http://$manager_ip/api/v3.1/deployments/$bp | jq -r '.error_code')
-     if [[ "$error" != "not_found_error" ]]; then
+    count=1
+    state=""
+    tries=6
+    while [[ "$state" != "deleted" && $tries -gt 0 ]]; do
+      sleep 10
+      curl -s -u admin:admin --header 'Tenant: default_tenant' \
+        -o /tmp/json http://$manager_ip/api/v3.1/node-instances
+      state=$(jq -r '.items[0].state' /tmp/json)
+      ((tries--))
+    done
+    if [[ "$state" != "deleted" ]]; then
+      jq -r '.items' /tmp/json
+ #     fail "node-instances delete failed"
+    fi
+
+    log "delete the deployment"
+    resp=$(curl -X DELETE -s -w "%{http_code}" -o /tmp/json \
+      -u admin:admin --header 'Tenant: default_tenant' \
+      -o /tmp/json  http://$manager_ip/api/v3.1/deployments/$bp)
+    log "Response: $resp"
+    cat /tmp/json
+    log "verify the deployment is deleted"
+    verify_deleted http://$manager_ip/api/v3.1/deployments/$bp
+    if [[ "$status" != "not_found_error" ]]; then
+      log "force delete deployment via cfy CLI over ssh to $k8s_user@$manager_ip"
+      cancel_executions
+      ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+        $k8s_user@$manager_ip cfy deployment delete -f -t default_tenant $bp
+      sleep 10
+      verify_deleted http://$manager_ip/api/v3.1/deployments/$bp
+      if [[ "$status" != "not_found_error" ]]; then
        fail "deployment delete failed"
-     fi
+      fi
+    fi
+  else
+    log "uninstall execution id = $id"
+    cat /tmp/json
   fi
 
   sleep 10
   log "delete the blueprint"
-  curl -s -X DELETE -u admin:admin --header 'Tenant: default_tenant' \
-    -o /tmp/json http://$manager_ip/api/v3.1/blueprints/$bp
+  resp=$(curl -X DELETE -s -w "%{http_code}" -o /tmp/json \
+    -u admin:admin --header 'Tenant: default_tenant' \
+    -o /tmp/json http://$manager_ip/api/v3.1/blueprints/$bp)
+  log "Response: $resp"
   sleep 10
   log "verify the blueprint is deleted"
-  error=$(curl -s -u admin:admin --header 'Tenant: default_tenant' \
-    http://$manager_ip/api/v3.1/blueprints/$bp | jq -r '.error_code')
-  if [[ "$error" != "not_found_error" ]]; then
+  verify_deleted http://$manager_ip/api/v3.1/blueprints/$bp
+  if [[ "$status" != "not_found_error" ]]; then
+    cat /tmp/json
     fail "blueprint delete failed"
   fi
   log "blueprint deleted"
 }
 
 function demo() {
+  manager_ip=$k8s_master
+
   # Per http://docs.getcloudify.org/4.1.0/plugins/container-support/
   # Per https://github.com/cloudify-incubator/cloudify-kubernetes-plugin
   # Also per guidance at https://github.com/cloudify-incubator/cloudify-kubernetes-plugin/issues/18
@@ -413,9 +486,8 @@ function clean () {
   # TODO
 }
 
+export WORK_DIR=$(pwd)
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
-source ~/k8s_env.sh
-manager_ip=$k8s_master
 
 case "$1" in
   "prereqs")
@@ -428,7 +500,9 @@ case "$1" in
     demo $2 $3
     ;;
   "start")
+    cd ~/models/tools/cloudify/blueprints
     start $2 $3
+    cd $WORK_DIR
     ;;
   "stop")
     stop $2 $3
