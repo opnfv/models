@@ -96,69 +96,81 @@ function wait_for_service() {
   done
 }
 
+function mariadb_chart_update() {
+  log "Set storageClass and nodeSelector in mariadb chart for $1"
+  sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./$1/charts/mariadb/values.yaml
+  sed -i "$ a nodeSelector:\n  role: worker" ./$1/charts/mariadb/values.yaml
+}
+
+function chart_update() {
+  log "Set type NodePort, storageClass, and nodeSelector in chart for $1"
+  # LoadBalancer is N/A for baremetal (public cloud only) - use NodePort
+  sed -i -- 's/LoadBalancer/NodePort/g' ./$1/values.yaml
+  # Select the storageClass created in the ceph setup step
+  sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./$1/values.yaml
+  sed -i "$ a nodeSelector:\n  role: worker" ./$1/values.yaml
+  sed -i -- "s/    spec:/    spec:\n      nodeSelector:\n{{ toYaml .Values.nodeSelector | indent 8 }}/" ./$1/templates/deployment.yaml
+}
+
 function start_chart() {
-  rm -rf /tmp/git/charts
-  git clone https://github.com/kubernetes/charts.git /tmp/git/charts
-  cd /tmp/git/charts/stable
-  case "$1" in
-    nginx)
-      rm -rf /tmp/git/helm
-      git clone https://github.com/kubernetes/helm.git /tmp/git/helm
-      cd /tmp/git/helm/docs/examples
-      sed -i -- 's/type: ClusterIP/type: NodePort/' ./nginx/values.yaml
-      helm install --name nx -f ./nginx/values.yaml ./nginx
-      wait_for_service nx-nginx
-      ;;
-    mediawiki)
-      mkdir ./mediawiki/charts
-      cp -r ./mariadb ./mediawiki/charts
-      # LoadBalancer is N/A for baremetal (public cloud only) - use NodePort
-      sed -i -- 's/LoadBalancer/NodePort/g' ./mediawiki/values.yaml
-      # Select the storageClass created in the ceph setup step
-      sed -i -- 's/# storageClass:/storageClass: "general"/g' ./mediawiki/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./mediawiki/charts/mariadb/values.yaml
-      helm install --name mw -f ./mediawiki/values.yaml ./mediawiki
-      wait_for_service mw-mediawiki
-      ;;
-    dokuwiki)
-      sed -i -- 's/# storageClass:/storageClass: "general"/g' ./dokuwiki/values.yaml
-      sed -i -- 's/LoadBalancer/NodePort/g' ./dokuwiki/values.yaml
-      helm install --name dw -f ./dokuwiki/values.yaml ./dokuwiki
-      wait_for_service dw-dokuwiki
-      ;;
-    wordpress)
-      mkdir ./wordpress/charts
-      cp -r ./mariadb ./wordpress/charts
-      sed -i -- 's/LoadBalancer/NodePort/g' ./wordpress/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./wordpress/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./wordpress/charts/mariadb/values.yaml
-      helm install --name wp -f ./wordpress/values.yaml ./wordpress
-      wait_for_service wp-wordpress
-      ;;
-    redmine)
-      mkdir ./redmine/charts
-      cp -r ./mariadb ./redmine/charts
-      cp -r ./postgresql ./redmine/charts
-      sed -i -- 's/LoadBalancer/NodePort/g' ./redmine/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./redmine/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./redmine/charts/mariadb/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./redmine/charts/postgresql/values.yaml
-      helm install --name rdm -f ./redmine/values.yaml ./redmine
-      wait_for_service rdm-redmine
-      ;;
-    owncloud)
-      # NOT YET WORKING: needs resolvable hostname for service
-      mkdir ./owncloud/charts
-      cp -r ./mariadb ./owncloud/charts
-      sed -i -- 's/LoadBalancer/NodePort/g' ./owncloud/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./owncloud/values.yaml
-      sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./owncloud/charts/mariadb/values.yaml
-      helm install --name oc -f ./owncloud/values.yaml ./owncloud
-      wait_for_service oc-owncloud
-      ;;
-    *)
-      log "demo not implemented for $1"
-  esac
+  if [[ "$1" == "nginx" ]]; then
+    rm -rf ~/git/helm
+    git clone https://github.com/kubernetes/helm.git ~/git/helm
+    cd ~/git/helm/docs/examples
+    sed -i -- 's/type: ClusterIP/type: NodePort/' ./nginx/values.yaml
+    sed -i -- 's/nodeSelector: {}/nodeSelector:\n  role: worker/' ./nginx/values.yaml
+    helm install --name nx -f ./nginx/values.yaml ./nginx
+    wait_for_service nx-nginx
+  else
+    rm -rf ~/git/charts
+    git clone https://github.com/kubernetes/charts.git ~/git/charts
+    cd ~/git/charts/stable
+    case "$1" in
+      mediawiki)
+        mkdir ./mediawiki/charts
+        cp -r ./mariadb ./mediawiki/charts
+        chart_update $1
+        mariadb_chart_update $1
+        helm install --name mw -f ./mediawiki/values.yaml ./mediawiki
+        wait_for_service mw-mediawiki
+        ;;
+      dokuwiki)
+        chart_update $1
+        helm install --name dw -f ./dokuwiki/values.yaml ./dokuwiki
+        wait_for_service dw-dokuwiki
+        ;;
+      wordpress)
+        mkdir ./wordpress/charts
+        cp -r ./mariadb ./wordpress/charts
+        chart_update $1
+        mariadb_chart_update $1
+        helm install --name wp -f ./wordpress/values.yaml ./wordpress
+        wait_for_service wp-wordpress
+        ;;
+      redmine)
+        mkdir ./redmine/charts
+        cp -r ./mariadb ./redmine/charts
+        cp -r ./postgresql ./redmine/charts
+        chart_update $1
+        mariadb_chart_update $1
+        sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./redmine/charts/postgresql/values.yaml
+        sed -i "$ a nodeSelector:\n  role: worker" ./redmine/charts/postgresql/values.yaml
+        helm install --name rdm -f ./redmine/values.yaml ./redmine
+        wait_for_service rdm-redmine
+        ;;
+      owncloud)
+        # NOT YET WORKING: needs resolvable hostname for service
+        mkdir ./owncloud/charts
+        cp -r ./mariadb ./owncloud/charts
+        chart_update $1
+        mariadb_chart_update $1
+        helm install --name oc -f ./owncloud/values.yaml ./owncloud
+        wait_for_service oc-owncloud
+        ;;
+      *)
+        log "demo not implemented for $1"
+    esac
+  fi
 # extra useful commands
 # kubectl describe pvc
 # kubectl get pvc

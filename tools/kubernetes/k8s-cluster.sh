@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#. What this is: script to setup a kubernetes cluster with calico as sni
+#. What this is: script to setup a kubernetes cluster with calico as cni
 #. Prerequisites:
 #. - Ubuntu Xenial or Centos 7 server for master and worker nodes
 #. - key-based auth setup for ssh/scp between master and worker nodes
@@ -223,6 +223,12 @@ function setup_k8s_master() {
     kubedns=$(kubectl get pods --all-namespaces | awk '/kube-dns/ {print $4}')
   done
   log "kube-dns status is $kubedns"
+
+  log "Allow pod scheduling on master (nodeSelector will be used to limit them)"
+  kubectl taint node $HOSTNAME node-role.kubernetes.io/master:NoSchedule-
+
+  log "Label node $HOSTNAME as 'master'"
+  kubectl label nodes $HOSTNAME role=master
 }
 
 function setup_k8s_workers() {
@@ -274,6 +280,8 @@ EOF
       sleep 10
     done
     log "node $host is 'Ready'."
+    log "Label node $host as 'worker'"
+    kubectl label nodes $host role=worker
   done
 
   log "***** kube proxy pods *****"
@@ -289,6 +297,7 @@ EOF
 }
 
 function setup_ceph() {
+  # TODO: use labels to target ceph nodes
   if [[ "$4" == "helm" ]]; then
     source ./ceph-helm.sh "$1" $2 $3 "$5"
   else
