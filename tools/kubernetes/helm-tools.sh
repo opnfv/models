@@ -106,6 +106,7 @@ function start_chart() {
       git clone https://github.com/kubernetes/helm.git /tmp/git/helm
       cd /tmp/git/helm/docs/examples
       sed -i -- 's/type: ClusterIP/type: NodePort/' ./nginx/values.yaml
+      sed -i -- 's/nodeSelector: {}/nodeSelector:\n  role: worker/' ./nginx/values.yaml
       helm install --name nx -f ./nginx/values.yaml ./nginx
       wait_for_service nx-nginx
       ;;
@@ -116,13 +117,16 @@ function start_chart() {
       sed -i -- 's/LoadBalancer/NodePort/g' ./mediawiki/values.yaml
       # Select the storageClass created in the ceph setup step
       sed -i -- 's/# storageClass:/storageClass: "general"/g' ./mediawiki/values.yaml
+      sed -i "$ a nodeSelector:\n  role: worker" ./mediawiki/values.yaml
       sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./mediawiki/charts/mariadb/values.yaml
+      sed -i "$ a nodeSelector:\n  role: worker" ./mediawiki/charts/mariadb/values.yaml
       helm install --name mw -f ./mediawiki/values.yaml ./mediawiki
       wait_for_service mw-mediawiki
       ;;
     dokuwiki)
       sed -i -- 's/# storageClass:/storageClass: "general"/g' ./dokuwiki/values.yaml
       sed -i -- 's/LoadBalancer/NodePort/g' ./dokuwiki/values.yaml
+      sed -i "$ a nodeSelector:\n  role: worker" ./dokuwiki/values.yaml
       helm install --name dw -f ./dokuwiki/values.yaml ./dokuwiki
       wait_for_service dw-dokuwiki
       ;;
@@ -131,7 +135,9 @@ function start_chart() {
       cp -r ./mariadb ./wordpress/charts
       sed -i -- 's/LoadBalancer/NodePort/g' ./wordpress/values.yaml
       sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./wordpress/values.yaml
+      sed -i -- 's/nodeSelector: {}/nodeSelector:\n  role: worker/' ./wordpress/values.yaml
       sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./wordpress/charts/mariadb/values.yaml
+      sed -i "$ a nodeSelector:\n  role: worker" ./wordpress/charts/mariadb/values.yaml
       helm install --name wp -f ./wordpress/values.yaml ./wordpress
       wait_for_service wp-wordpress
       ;;
@@ -141,8 +147,11 @@ function start_chart() {
       cp -r ./postgresql ./redmine/charts
       sed -i -- 's/LoadBalancer/NodePort/g' ./redmine/values.yaml
       sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./redmine/values.yaml
+      sed -i "$ a nodeSelector:\n  role: worker" ./redmine/values.yaml
       sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./redmine/charts/mariadb/values.yaml
+      sed -i "$ a nodeSelector:\n  role: worker" ./redmine/charts/mariadb/values.yaml
       sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./redmine/charts/postgresql/values.yaml
+      sed -i "$ a nodeSelector:\n  role: worker" ./redmine/charts/postgresql/values.yaml
       helm install --name rdm -f ./redmine/values.yaml ./redmine
       wait_for_service rdm-redmine
       ;;
@@ -152,7 +161,9 @@ function start_chart() {
       cp -r ./mariadb ./owncloud/charts
       sed -i -- 's/LoadBalancer/NodePort/g' ./owncloud/values.yaml
       sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./owncloud/values.yaml
+      sed -i "$ a nodeSelector:\n  role: worker" ./owncloud/values.yaml
       sed -i -- 's/# storageClass: "-"/storageClass: "general"/g' ./owncloud/charts/mariadb/values.yaml
+      sed -i "$ a nodeSelector:\n  role: worker" ./owncloud/charts/mariadb/values.yaml
       helm install --name oc -f ./owncloud/values.yaml ./owncloud
       wait_for_service oc-owncloud
       ;;
