@@ -72,6 +72,8 @@ EOF
   step_end "$1"
 }
 
+deploy_start=$((`date +%s`/60))
+
 extras=${10}
 
 if [[ "$4" != "$5" ]]; then
@@ -178,6 +180,10 @@ bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master "$k8s_workers
 step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master \"$k8s_workers\""
 
 echo; echo "$0 $(date): All done!"
+deploy_end=$((`date +%s`/60))
+runtime=$((deploy_end-deploy_start))
+log "Deploy \"$1\" duration = $runtime minutes"
+
 port=$(bash ~/models/tools/cloudify/k8s-cloudify.sh port nginx)
 echo "Prometheus UI is available at http://$k8s_master:9090"
 echo "InfluxDB API is available at http://$ves_influxdb_host/query&db=veseventsdb&q=<string>"
