@@ -69,35 +69,47 @@
 #
 # Cleanup: bash vHello_Tacker.sh clean
 #
-# How to use:
-#   $ git clone https://gerrit.opnfv.org/gerrit/models
-#   $ cd models/tests
-#   $ bash vHello_Tacker.sh [setup|run] [<openrc>] [branch]
-#     setup: setup test environment
-#     <openrc>: location of OpenStack openrc file
-#     branch: OpenStack branch to install (default: master)
-#   $ bash vHello_Tacker.sh [start|stop|clean]
-#     run: setup test environment and run test
-#     start: install blueprint and run test
-#     stop: stop test and uninstall blueprint
-#     clean: cleanup after test
+#.How to use:
+#.  $ git clone https://gerrit.opnfv.org/gerrit/models
+#.  $ cd models/tests
+#.  $ bash vHello_Tacker.sh <setup|run> <openrc> [branch]
+#.    setup: setup test environment
+#.    openrc: location of OpenStack openrc file
+#.    branch: OpenStack branch to install (default: master)
+#.  $ source ~/venv/bin/activate
+#.    This is needed to use the OpenStack clients in the following steps.
+#.  $ bash vHello_Tacker.sh <start|stop|clean>
+#.    run: setup test environment and run test
+#.    start: install blueprint and run test
+#.    stop: stop test and uninstall blueprint
+#.    clean: cleanup after test
 
 trap 'fail' ERR
 
+function ignore() {
+  log "last command failed, but continuing anyway (fail on err is disabled...)"
+}
+
+function log() {
+  f=$(caller 0 | awk '{print $2}')
+  l=$(caller 0 | awk '{print $1}')
+  echo "$f:$l ($(date)) $1"
+}
+
 pass() {
-  echo "$0: $(date) Hooray!"
+  log "Hooray!"
   end=`date +%s`
   runtime=$((end-test_start))
-  echo "$0: $(date) Test Duration = $runtime seconds"
+  log "Test Duration = $runtime seconds"
   exit 0
 }
 
 fail() {
-  echo "$0: $(date) Test Failed!"
+  log "Test Failed!"
   end=`date +%s`
   runtime=$((end-test_start))
   runtime=$((runtime/60))
-  echo "$0: $(date) Test Duration = $runtime seconds"
+  log "Test Duration = $runtime seconds"
   exit 1
 }
 
@@ -117,7 +129,21 @@ get_floating_net () {
   if [[ $FLOATING_NETWORK_ID ]]; then
     FLOATING_NETWORK_NAME=$(neutron net-show $FLOATING_NETWORK_ID | awk "/ name / { print \$4 }")
   else
-    echo "$0: $(date) Floating network not found"
+    log "Floating network not found"
+    exit 1
+  fi
+}
+
+function get_external_net() {
+  network_ids=($(neutron net-list|grep -v "+"|grep -v name|awk '{print $2}'))
+  for id in "${network_ids[@]}"; do
+      [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && ext_net_id=${id}
+  done
+  if [[ $ext_net_id ]]; then
+    EXTERNAL_NETWORK_NAME=$(neutron net-show $ext_net_id | awk "/ name / { print \$4 }")
+    EXTERNAL_SUBNET_ID=$(neutron net-show $EXTERNAL_NETWORK_NAME | awk "/ subnets / { print \$4 }")
+  else
+    log "External network not found"
     exit 1
   fi
 }
@@ -130,62 +156,95 @@ try () {
     let count=$count-1
     $3
   done
-  if [[ $count -eq 0 ]]; then echo "$0: $(date) Command \"$3\" was not successful after $1 tries"; fi
+  if [[ $count -eq 0 ]]; then log "Command \"$3\" was not successful after $1 tries"; fi
 }
 
 setup () {
   trap 'fail' ERR
 
-  echo "$0: $(date) Setup shared test folder /opt/tacker"
-  if [ -d /opt/tacker ]; then sudo rm -rf /opt/tacker; fi
-  sudo mkdir -p /opt/tacker
-  sudo chown $USER /opt/tacker
-  chmod 777 /opt/tacker/
-
-  echo "$0: $(date) copy test script and openrc to /opt/tacker"
-  cp $0 /opt/tacker/.
-  cp $1 /opt/tacker/admin-openrc.sh
-
-  source /opt/tacker/admin-openrc.sh
-  chmod 755 /opt/tacker/*.sh
-
-  echo "$0: $(date) tacker-setup part 1"
-  bash utils/tacker-setup.sh init
+  log "run tacker-setup.sh"
+  bash utils/tacker-setup.sh setup $openrc $branch
   if [ $? -eq 1 ]; then fail; fi
+  assert "models-tacker-001 (Tacker installation in a docker container on the jumphost)" true
 
-  echo "$0: $(date) tacker-setup part 2"
-# TODO: find a generic way to set extension_drivers = port_security in ml2_conf.ini
-  # On the neutron service host, update ml2_conf.ini and and restart neutron service
-  # sed -i -- 's~#extension_drivers =~extension_drivers = port_security~' /etc/neutron/plugins/ml2/ml2_conf.ini
-  # For devstack, set in local.conf per http://docs.openstack.org/developer/devstack/guides/neutron.html
-  # Q_ML2_PLUGIN_EXT_DRIVERS=port_security
+  log "Install OpenStack clients"
+  source ../tools/setup_osc.sh $branch
+  source ~/venv/bin/activate
 
+  log "Install python-tackerclient"
+  cd ~/venv/git
+  git clone https://github.com/openstack/python-tackerclient.git
+  cd python-tackerclient
+  pip install .
+  cd ..
 
-  dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
-  if [ "$dist" == "Ubuntu" ]; then
-    echo "$0: $(date) Execute tacker-setup.sh in the container"
-    sudo docker exec -it tacker /bin/bash /opt/tacker/tacker-setup.sh setup $2
-    if [ $? -eq 1 ]; then fail; fi
+  log "Setup OpenStack CLI environment"
+  source $openrc
+
+  log "Create image models-xenial-server"
+  image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
+  if [[ -z "$image_id" ]]; then
+    wget http://cloud-images.ubuntu.com/releases/xenial/release/ubuntu-16.04-server-cloudimg-amd64-disk1.img \
+      -O ~/ubuntu-16.04-server-cloudimg-amd64-disk1.img
+    glance image-create --name models-xenial-server --disk-format qcow2 --container-format bare
+    image_id=$(openstack image list | awk "/ models-xenial-server / { print \$2 }")
+    glance image-upload --file ~/ubuntu-16.04-server-cloudimg-amd64-disk1.img $image_id
+   fi
+
+  log "Create management network"
+  if [ $(neutron net-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
+    log "vnf_mgmt network exists"
   else
-    echo "$0: $(date) Execute tacker-setup.sh in the container"
-    sudo docker exec -i -t tacker /bin/bash /opt/tacker/tacker-setup.sh setup $2
-    if [ $? -eq 1 ]; then fail; fi
+    neutron net-create vnf_mgmt
+    log "Create management subnet"
+    neutron subnet-create vnf_mgmt 192.168.200.0/24 --name vnf_mgmt --gateway 192.168.200.1 --enable-dhcp --allocation-pool start=192.168.200.2,end=192.168.200.254 --dns-nameserver 8.8.8.8
   fi
 
-  assert "models-tacker-001 (Tacker installation in a docker container on the jumphost)" true
+  log "Create router for vnf_mgmt network"
+  if [ $(neutron router-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
+    log "vnf_mgmt router exists"
+  else
+    neutron router-create vnf_mgmt_router
+    log "Create router gateway for vnf_mgmt network"
+    get_external_net
+    neutron router-gateway-set vnf_mgmt_router $EXTERNAL_NETWORK_NAME
+    log "Add router interface for vnf_mgmt network"
+    neutron router-interface-add vnf_mgmt_router subnet=vnf_mgmt
+  fi
+
+  echo "Create private network"
+  if [ $(neutron net-list | awk "/ vnf_private / { print \$2 }") ]; then
+    log "vnf_private network exists"
+  else
+    neutron net-create vnf_private
+    log "Create private subnet"
+    neutron subnet-create vnf_private 192.168.201.0/24 --name vnf_private --gateway 192.168.201.1 --enable-dhcp --allocation-pool start=192.168.201.2,end=192.168.201.254 --dns-nameserver 8.8.8.8
+  fi
+
+  log "Create router for vnf_private network"
+  if [ $(neutron router-list | awk "/ vnf_private / { print \$2 }") ]; then
+    log "vnf_private router exists"
+  else
+    neutron router-create vnf_private_router
+    log "Create router gateway for vnf_private network"
+    get_external_net
+    neutron router-gateway-set vnf_private_router $EXTERNAL_NETWORK_NAME
+    log "Add router interface for vnf_private network"
+    neutron router-interface-add vnf_private_router subnet=vnf_private
+  fi
 }
 
 copy_blueprint() {
-  echo "$0: $(date) copy test script to /opt/tacker"
+  log "copy test script to /opt/tacker"
   cp $0 /opt/tacker/.
 
-  echo "$0: $(date) reset blueprints folder"
+  log "reset blueprints folder"
   if [[ -d /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker ]]; then
     rm -rf /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker
   fi
   mkdir -p /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker
 
-  echo "$0: $(date) copy tosca-vnfd-hello-world-tacker to blueprints folder"
+  log "copy tosca-vnfd-hello-world-tacker to blueprints folder"
   cp -r blueprints/tosca-vnfd-hello-world-tacker /opt/tacker/blueprints
 }
 
@@ -193,24 +252,24 @@ start() {
 #  Disable trap for now, need to test to ensure premature fail does not occur
 #  trap 'fail' ERR
 
-  echo "$0: $(date) setup OpenStack CLI environment"
+  log "setup OpenStack CLI environment"
   source /opt/tacker/admin-openrc.sh
 
-  echo "$0: $(date) Create Nova key pair"
+  log "Create Nova key pair"
   if [[ -f /opt/tacker/vHello ]]; then rm /opt/tacker/vHello; fi
   ssh-keygen -t rsa -N "" -f /opt/tacker/vHello -C ubuntu@vHello
   chmod 600 /opt/tacker/vHello
   openstack keypair create --public-key /opt/tacker/vHello.pub vHello
   assert "models-nova-001 (Keypair creation)" true
 
-  echo "$0: $(date) Inject public key into blueprint"
+  log "Inject public key into blueprint"
   pubkey=$(cat /opt/tacker/vHello.pub)
   sed -i -- "s~<pubkey>~$pubkey~" /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker/blueprint.yaml
 
-  echo "$0: $(date) Get external network for Floating IP allocations"
+  log "Get external network for Floating IP allocations"
   get_floating_net
 
-  echo "$0: $(date) create VNFD"
+  log "create VNFD"
   cd /opt/tacker/blueprints/tosca-vnfd-hello-world-tacker
   # newton: NAME (was "--name") is now a positional parameter
   tacker vnfd-create --vnfd-file blueprint.yaml hello-world-tacker
@@ -220,34 +279,33 @@ start() {
     assert "models-tacker-002 (VNFD creation)" false
   fi
 
-
-  echo "$0: $(date) create VNF"
+  log "create VNF"
   # newton: NAME (was "--name") is now a positional parameter
   tacker vnf-create --vnfd-name hello-world-tacker hello-world-tacker
   if [ $? -eq 1 ]; then fail; fi
 
-  echo "$0: $(date) wait for hello-world-tacker to go ACTIVE"
+  log "wait for hello-world-tacker to go ACTIVE"
   active=""
   count=24
   while [[ -z $active && $count -gt 0 ]]
   do
     active=$(tacker vnf-show hello-world-tacker | grep ACTIVE)
     if [[ $(tacker vnf-show hello-world-tacker | grep -c ERROR) -gt 0 ]]; then
-      echo "$0: $(date) hello-world-tacker VNF creation failed with state ERROR"
+      log "hello-world-tacker VNF creation failed with state ERROR"
       assert "models-tacker-002 (VNF creation)" false
     fi
     let count=$count-1
     sleep 30
-    echo "$0: $(date) wait for hello-world-tacker to go ACTIVE"
+    log "wait for hello-world-tacker to go ACTIVE"
   done
   if [[ $count == 0 ]]; then
-    echo "$0: $(date) hello-world-tacker VNF creation failed - timed out"
+    log "hello-world-tacker VNF creation failed - timed out"
     assert "models-tacker-002 (VNF creation)" false
   fi
   assert "models-tacker-002 (VNF creation)" true
 
   # Setup for workarounds
-  echo "$0: $(date) directly set port security on ports (unsupported in Mitaka Tacker)"
+  log "directly set port security on ports (unsupported in Mitaka Tacker)"
   # Alternate method
   #  HEAT_ID=$(tacker vnf-show hello-world-tacker | awk "/instance_id/ { print \$4 }")
   #  SERVER_ID=$(openstack stack resource list $HEAT_ID | awk "/VDU1 / { print \$4 }")
@@ -257,7 +315,7 @@ start() {
     if [[ $(neutron port-show $id|grep $SERVER_ID) ]]; then neutron port-update ${id} --port-security-enabled=True; fi
   done
 
-  echo "$0: $(date) directly assign security group (unsupported in Mitaka Tacker)"
+  log "directly assign security group (unsupported in Mitaka Tacker)"
   if [[ $(neutron security-group-list | awk "/ vHello / { print \$2 }") ]]; then neutron security-group-delete vHello; fi
   neutron security-group-create vHello
   neutron security-group-rule-create --direction ingress --protocol TCP --port-range-min 22 --port-range-max 22 vHello
@@ -265,20 +323,22 @@ start() {
   openstack server add security group $SERVER_ID vHello
   openstack server add security group $SERVER_ID default
 
-  echo "$0: $(date) associate floating IP"
+  log "create floating IP"
   get_floating_net
-  FIP=$(nova floating-ip-create $FLOATING_NETWORK_NAME | awk "/$FLOATING_NETWORK_NAME/ { print \$4 }")
+  FIP=$(openstack floating ip create $FLOATING_NETWORK_NAME | awk "/floating_ip_address/ { print \$4 }")
+
+  log "associate floating IP \"$FIP\" to server \"$SERVER_ID\""
   nova floating-ip-associate $SERVER_ID $FIP
   # End setup for workarounds
 
-  echo "$0: $(date) get vHello server address"
+  log "get vHello server address"
   SERVER_IP=$(openstack server show $SERVER_ID | awk "/ addresses / { print \$6 }")
   SERVER_URL="http://$SERVER_IP"
 
-  echo "$0: $(date) wait 30 seconds for vHello server to startup at $SERVER_URL"
+  log "wait 30 seconds for vHello server to startup at $SERVER_URL"
   sleep 30
 
-  echo "$0: $(date) verify vHello server is running"
+  log "verify vHello server is running"
   apt-get install -y curl
   count=12
   while [[ $(curl $SERVER_URL | grep -c "Hello World") == 0 ]]
@@ -292,7 +352,7 @@ start() {
   assert "models-tacker-vnfd-002 (artifacts creation)" true
   assert "models-tacker-vnfd-003 (user_data creation)" true
 
-  echo "$0: $(date) verify contents of config drive are included in web page"
+  log "verify contents of config drive are included in web page"
   id=$(curl $SERVER_URL | awk "/uuid/ { print \$2 }")
   if [[ ! -z $id ]]; then
     assert "models-tacker-vnfd-001 (config_drive creation)" true
@@ -304,16 +364,16 @@ start() {
 stop() {
   trap 'fail' ERR
 
-  echo "$0: $(date) setup OpenStack CLI environment"
+  log "setup OpenStack CLI environment"
   source /opt/tacker/admin-openrc.sh
 
   if [[ "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')" != '' ]]; then
-    echo "$0: $(date) uninstall vHello blueprint via CLI"
+    log "uninstall vHello blueprint via CLI"
     try 12 10 "tacker vnf-delete hello-world-tacker"
     # It can take some time to delete a VNF - thus wait 2 minutes
     count=12
     while [[ $count -gt 0 && "$(tacker vnf-list|grep hello-world-tacker|awk '{print $2}')" != '' ]]; do
-      echo "$0: $(date) waiting for hello-world-tacker VNF delete to complete"
+      log "waiting for hello-world-tacker VNF delete to complete"
       sleep 10
       let count=$count-1
     done
@@ -326,7 +386,7 @@ stop() {
 
   # It can take some time to delete a VNFD - thus wait 2 minutes
   if [[ "$(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')" != '' ]]; then
-    echo "$0: $(date) trying to delete the hello-world-tacker VNFD"
+    log "trying to delete the hello-world-tacker VNFD"
     try 12 10 "tacker vnfd-delete hello-world-tacker"
     if [[ "$(tacker vnfd-list|grep hello-world-tacker|awk '{print $2}')" == '' ]]; then
       assert "models-tacker-005 (VNFD deletion)" true
@@ -350,15 +410,32 @@ stop() {
   kid=($(openstack keypair list|grep vHello|awk '{print $2}')); for id in "${kid[@]}"; do openstack keypair delete ${id};  done
 }
 
-forward_to_container () {
-  echo "$0: $(date) pass $1 command to vHello.sh in tacker container"
-  CONTAINER=$(sudo docker ps -a | awk "/tacker/ { print \$1 }")
-  sudo docker exec $CONTAINER /bin/bash /opt/tacker/vHello_Tacker.sh $1
-  if [ $? -eq 1 ]; then fail; fi
+function clean() {
+  trap 'ignore' ERR
+  log "Uninstall Tacker"
+  bash utils/tacker-setup.sh clean
+  sudo docker stop tacker
+  sudo docker rm -v tacker
+  sudo rm -rf /opt/tacker
+
+  log "Uninstall test environment"
+  pid=($(neutron port-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in "${pid[@]}"; do neutron port-delete ${id};  done
+  sid=($(openstack security group list|grep security_group_local_security_group|awk '{print $2}')); for id in "${sid[@]}"; do openstack security group delete ${id};  done
+  neutron router-gateway-clear vnf_mgmt_router
+  pid=($(neutron router-port-list vnf_mgmt_router|grep -v name|awk '{print $2}')); for id in "${pid[@]}"; do neutron router-interface-delete vnf_mgmt_router vnf_mgmt;  done
+  neutron router-delete vnf_mgmt_router
+  neutron net-delete vnf_mgmt
+  neutron router-gateway-clear vnf_private_router
+  pid=($(neutron router-port-list vnf_private_router|grep -v name|awk '{print $2}')); for id in "${pid[@]}"; do neutron router-interface-delete vnf_private_router vnf_private;  done
+  neutron router-delete vnf_private_router
+  neutron net-delete vnf_private
 }
 
 test_start=`date +%s`
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
+
+openrc=$2
+branch=$3
 
 case "$1" in
   setup)
@@ -369,48 +446,25 @@ case "$1" in
   run)
     setup $2 $3
     copy_blueprint
-    forward_to_container start
+    start
     if [ $? -eq 1 ]; then fail; fi
     pass
     ;;
   start)
-    if [[ -f /.dockerenv ]]; then
-      start
-    else
-      copy_blueprint
-      forward_to_container start
-    fi
+    copy_blueprint
+    start
     if [ $? -eq 1 ]; then fail; fi
     pass
     ;;
   stop)
-    if [[ -f /.dockerenv ]]; then
-      stop
-    else
-      forward_to_container stop
-    fi
+    stop
     if [ $? -eq 1 ]; then fail; fi
     pass
     ;;
   clean)
-    echo "$0: $(date) Uninstall Tacker and test environment"
-    forward_to_container stop
-    sudo docker exec -it tacker /bin/bash /opt/tacker/tacker-setup.sh clean
-    sudo docker stop tacker
-    sudo docker rm -v tacker
-    sudo rm -rf /opt/tacker
+    clean
     pass
     ;;
   *)
-    echo "usage: "
-    echo "$ bash vHello_Tacker.sh [setup|run] [<openrc>] [branch]"
-    echo "  setup: setup test environment"
-    echo "  <openrc>: location of OpenStack openrc file"
-    echo "  branch: OpenStack branch to install (default: master)"
-    echo "$ bash vHello_Tacker.sh [start|stop|clean]"
-    echo "  run: setup test environment and run test"
-    echo "  start: install blueprint and run test"
-    echo "  stop: stop test and uninstall blueprint"
-    echo "  clean: cleanup after test"
-    fail
+    if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then grep '#. ' $0; fi
 esac
