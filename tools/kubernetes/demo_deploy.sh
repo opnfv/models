@@ -123,8 +123,8 @@ if [[ "$k8s_master" != "$k8s_workers" ]]; then
   echo; echo "$0 $(date): Setting up kubernetes workers..."
   run_master "bash k8s-cluster.sh workers \"$k8s_workers\""
 else
-  echo; echo "Enable pod scheduling on master node"
-  run_master "kubectl taint node $k8s_nodes node-role.kubernetes.io/master:NoSchedule-"
+  echo; echo "Label $k8s_master_host for role=worker"
+  run_master "kubectl label nodes $k8s_master_host role=worker --overwrite"
 fi
 
 echo; echo "$0 $(date): Setting up helm..."
@@ -147,7 +147,7 @@ fi
 echo; echo "Setting up Prometheus..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
   $k8s_user@$k8s_master:/home/$k8s_user/.
-run_master "bash prometheus-tools.sh all \"$k8s_workers\""
+run_master "bash prometheus-tools.sh setup"
 
 echo; echo "$0 $(date): Setting up cloudify..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/cloudify \
@@ -166,7 +166,7 @@ if [[ ! -d ~/ves ]]; then
 fi
 ves_influxdb_host=$k8s_master:8086
 export ves_influxdb_host
-ves_grafana_host=$k8s_master:3000
+ves_grafana_host=$k8s_master:30330
 export ves_grafana_host
 ves_grafana_auth=admin:admin
 export ves_grafana_auth
@@ -185,7 +185,7 @@ runtime=$((deploy_end-deploy_start))
 log "Deploy \"$1\" duration = $runtime minutes"
 
 port=$(bash ~/models/tools/cloudify/k8s-cloudify.sh port nginx)
-echo "Prometheus UI is available at http://$k8s_master:9090"
+echo "Prometheus UI is available at http://$k8s_master:30990"
 echo "InfluxDB API is available at http://$ves_influxdb_host/query&db=veseventsdb&q=<string>"
 echo "Grafana dashboards are available at http://$ves_grafana_host (login as $ves_grafana_auth)"
 echo "Grafana API is available at http://$ves_grafana_auth@$ves_grafana_host/api/v1/query?query=<string>"

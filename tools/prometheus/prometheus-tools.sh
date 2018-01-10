@@ -22,13 +22,8 @@
 #. Usage:
 #. $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
 #. $ cd ~/models/tools/prometheus
-#. $ bash prometheus-tools.sh setup "<list of agent nodes>"
-#. <list of agent nodes>: space separated IP of agent nodes
-#. $ bash prometheus-tools.sh grafana
-#.   Runs grafana in a docker container and connects to prometheus as datasource
-#. $ bash prometheus-tools.sh all "<list of agent nodes>"
-#.   Does all of the above
-#. $ bash prometheus-tools.sh clean "<list of agent nodes>"
+#. $ bash prometheus-tools.sh setup
+#. $ bash prometheus-tools.sh clean
 #
 
 # Prometheus links
@@ -55,74 +50,21 @@ function fail() {
 
 function setup_prometheus() {
   # Prerequisites
-  log "Setting up prometheus master and agents"
   sudo apt install -y golang-go jq
+  host_ip=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
 
   # Install Prometheus server
-  log "Setting up prometheus master"
-  if [[ -d ~/prometheus ]]; then rm -rf ~/prometheus; fi
-  mkdir ~/prometheus
-  cd  ~/prometheus
-  wget https://github.com/prometheus/prometheus/releases/download/v2.0.0-beta.2/prometheus-2.0.0-beta.2.linux-amd64.tar.gz
-  tar xvfz prometheus-*.tar.gz
-  cd prometheus-*
-  # Customize prometheus.yml below for your server IPs
-  # This example assumes the node_exporter and haproxy_exporter will be installed on each node
-  cat <<'EOF' >prometheus.yml
-global:
-  scrape_interval:     15s # By default, scrape targets every 15 seconds.
+  # TODO: add     --set server.persistentVolume.storageClass=general
+  # TODO: add persistent volume support
+  log "Setup prometheus via Helm"
+  helm install stable/prometheus --name pm \
+    --set alertmanager.enabled=false \
+    --set pushgateway.enabled=false \
+    --set server.service.nodePort=30990 \
+    --set server.service.type=NodePort \
+    --set server.persistentVolume.enabled=false
 
-  # Attach these labels to any time series or alerts when communicating with
-  # external systems (federation, remote storage, Alertmanager).
-  external_labels:
-    monitor: 'codelab-monitor'
-
-# A scrape configuration containing exactly one endpoint to scrape:
-# Here it's Prometheus itself.
-scrape_configs:
-  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
-  - job_name: 'prometheus'
-
-    # Override the global default and scrape targets from this job every 5 seconds.
-    scrape_interval: 5s
-
-    static_configs:
-EOF
-
-  for node in $nodes; do
-    echo "      - targets: ['${node}:9100']" >>prometheus.yml
-    echo "      - targets: ['${node}:9101']" >>prometheus.yml
-  done
-
-  # Start Prometheus
-  nohup ./prometheus --config.file=prometheus.yml > /dev/null 2>&1 &
-  # Browse to http://host_ip:9090
-
-  log "Installing exporters"
-  # Install exporters
-  # https://github.com/prometheus/node_exporter
-  cd ~/prometheus
-  wget https://github.com/prometheus/node_exporter/releases/download/v0.14.0/node_exporter-0.14.0.linux-amd64.tar.gz
-  tar xvfz node*.tar.gz
-  # https://github.com/prometheus/haproxy_exporter
-  wget https://github.com/prometheus/haproxy_exporter/releases/download/v0.7.1/haproxy_exporter-0.7.1.linux-amd64.tar.gz
-  tar xvfz haproxy*.tar.gz
-
-  # The scp and ssh actions below assume you have key-based access enabled to the nodes
-  for node in $nodes; do
-    log "Setup agent at $node"
-    scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      node_exporter-0.14.0.linux-amd64/node_exporter ubuntu@$node:/home/ubuntu/node_exporter
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$node "nohup ./node_exporter > /dev/null 2>&1 &"
-    scp -r -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      haproxy_exporter-0.7.1.linux-amd64/haproxy_exporter ubuntu@$node:/home/ubuntu/haproxy_exporter
-    ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-      ubuntu@$node "nohup ./haproxy_exporter > /dev/null 2>&1 &"
-  done
-
-  host_ip=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
-  while ! curl -o /tmp/up http://$host_ip:9090/api/v1/query?query=up ; do
+  while ! curl -o /tmp/up http://$host_ip:30990/api/v1/query?query=up ; do
     log "Prometheus API is not yet responding... waiting 10 seconds"
     sleep 10
   done
@@ -135,30 +77,40 @@ EOF
     job=$(jq -r ".data.result[$exp].metric.job" /tmp/up)
     log "$job at $eip"
   done
-  log "Prometheus dashboard is available at http://$host_ip:9090"
-  echo "Prometheus dashboard is available at http://$host_ip:9090" >>/tmp/summary
+  log "Prometheus dashboard is available at http://$host_ip:30990"
+  echo "Prometheus dashboard is available at http://$host_ip:30990" >>/tmp/summary
 }
 
-function connect_grafana() {
-  log "Setup Grafana datasources and dashboards"
-  prometheus_ip=$1
-  grafana_ip=$2
+function setup_grafana() {
+  # TODO: use randomly generated password
+  # TODO: add persistent volume support
+  log "Setup grafana via Helm"
+  #TODSO: add  --set server.persistentVolume.storageClass=general
+  helm install --name gf stable/grafana \
+    --set server.service.nodePort=30330 \
+    --set server.service.type=NodePort \
+    --set server.adminPassword=admin \
+    --set server.persistentVolume.enabled=false
 
-  while ! curl -X POST http://admin:admin@$grafana_ip:3000/api/login/ping ; do
+  log "Setup Grafana datasources and dashboards"
+  host_ip=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
+  prometheus_ip=$host_ip
+  grafana_ip=$host_ip
+
+  while ! curl -X POST http://admin:admin@$grafana_ip:30330/api/login/ping ; do
     log "Grafana API is not yet responding... waiting 10 seconds"
     sleep 10
   done
 
   log "Setup Prometheus datasource for Grafana"
-  cd ~/prometheus/
   cat >datasources.json <<EOF
 {"name":"Prometheus", "type":"prometheus", "access":"proxy", \
-"url":"http://$prometheus_ip:9090/", "basicAuth":false,"isDefault":true, \
+"url":"http://$prometheus_ip:30990/", "basicAuth":false,"isDefault":true, \
 "user":"", "password":"" }
 EOF
   curl -X POST -o /tmp/json -u admin:admin -H "Accept: application/json" \
     -H "Content-type: application/json" \
-    -d @datasources.json http://admin:admin@$grafana_ip:3000/api/datasources
+    -d @datasources.json http://admin:admin@$grafana_ip:30330/api/datasources
 
   if [[ "$(jq -r '.message' /tmp/json)" != "Datasource added" ]]; then
     fail "Datasource creation failed"
@@ -174,42 +126,21 @@ EOF
   cd $WORK_DIR/dashboards
   boards=$(ls)
   for board in $boards; do
-    curl -X POST -u admin:admin -H "Accept: application/json" -H "Content-type: application/json" -d @${board} http://$grafana_ip:3000/api/dashboards/db
+    curl -X POST -u admin:admin -H "Accept: application/json" -H "Content-type: application/json" -d @${board} http://$grafana_ip:30330/api/dashboards/db
   done
-  log "Grafana dashboards are available at http://$host_ip:3000 (login as admin/admin)"
-  echo "Grafana dashboards are available at http://$host_ip:3000 (login as admin/admin)" >>/tmp/summary
-  log "Grafana API is available at http://admin:admin@$host_ip:3000/api/v1/query?query=<string>"
-  echo "Grafana API is available at http://admin:admin@$host_ip:3000/api/v1/query?query=<string>" >>/tmp/summary
-}
-
-function run_and_connect_grafana() {
-  # Per http://docs.grafana.org/installation/docker/
-  host_ip=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
-  sudo docker run -d -p 3000:3000 --name grafana grafana/grafana
-  status=$(sudo docker inspect grafana | jq -r '.[0].State.Status')
-  while [[ "x$status" != "xrunning" ]]; do
-    log "Grafana container state is ($status)"
-    sleep 10
-    status=$(sudo docker inspect grafana | jq -r '.[0].State.Status')
-  done
-  log "Grafana container state is $status"
-
-  connect_grafana $host_ip $host_ip
+  log "Grafana dashboards are available at http://$host_ip:30330 (login as admin/admin)"
+  echo "Grafana dashboards are available at http://$host_ip:30330 (login as admin/admin)" >>/tmp/summary
+  log "Grafana API is available at http://admin:admin@$host_ip:30330/api/v1/query?query=<string>"
+  echo "Grafana API is available at http://admin:admin@$host_ip:30330/api/v1/query?query=<string>" >>/tmp/summary
   log "connect_grafana complete"
 }
 
 export WORK_DIR=$(pwd)
-nodes=$2
+
 case "$1" in
   setup)
-    setup_prometheus "$2"
-    ;;
-  grafana)
-    run_and_connect_grafana
-    ;;
-  all)
-    setup_prometheus "$2"
-    run_and_connect_grafana
+    setup_prometheus
+    setup_grafana
     ;;
   clean)
     sudo kill $(ps -ef | grep "\./prometheus" | grep prometheus.yml | awk '{print $2}')

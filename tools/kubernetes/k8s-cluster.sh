@@ -46,6 +46,8 @@
 #. Status: work in progress, incomplete
 #
 
+trap 'fail' ERR
+
 function fail() {
   log $1
   exit 1
@@ -227,7 +229,7 @@ function setup_k8s_master() {
   log "Allow pod scheduling on master (nodeSelector will be used to limit them)"
   kubectl taint node $HOSTNAME node-role.kubernetes.io/master:NoSchedule-
 
-  log "Label node $HOSTNAME as 'master'"
+  log "Label node $HOSTNAME as 'role=master'"
   kubectl label nodes $HOSTNAME role=master
 }
 
