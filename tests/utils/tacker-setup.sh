@@ -94,7 +94,10 @@ EOF
   sudo mkdir -p /opt/tacker
   sudo chown $USER /opt/tacker
   cp $openrc /opt/tacker/admin-openrc.sh
-
+  if [[ -f /etc/ssl/certs/mcp_os_cacert ]]; then
+    cp /etc/ssl/certs/mcp_os_cacert /opt/tacker/mcp_os_cacert
+  fi
+ 
   if [[ "$branch" == "" ]]; then branch="latest"; fi
   log "Start tacker container with image blsaws/models-tacker:$branch"
   OS_TENANT_ID=$(openstack project show admin | awk '/ id / {print $4}')

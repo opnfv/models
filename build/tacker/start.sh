@@ -33,6 +33,9 @@ mysql --user=root --password=$MYSQL_PASSWORD -e "CREATE DATABASE tacker; GRANT A
 
 log "Setup OpenStack CLI environment"
 source /opt/tacker/admin-openrc.sh
+if [[ -f /opt/tacker/mcp_os_cacert ]]; then
+  cp /opt/tacker/mcp_os_cacert /etc/ssl/certs/mcp_os_cacert
+fi
 
 uid=$(openstack user list | awk "/ tacker / { print \$2 }")
 if [[ $uid ]]; then
