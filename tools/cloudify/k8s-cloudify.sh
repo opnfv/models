@@ -28,6 +28,7 @@
 #.     <k8s-master>: IP or hostname of kubernetes master server
 #.   $ ssh -x <user>@<k8s-master> cloudify/k8s-cloudify.sh prereqs
 #.     <user>: username on the target host. Also used to indicate OS name.
+#.     <k8s-master>: IP or hostname of kubernetes master server
 #.     prereqs: installs prerequisites and configures <user> user for kvm use
 #.   $ ssh -x <user>@<k8s-master> bash cloudify/k8s-cloudify.sh setup
 #.     <user>: username on the target host. Also used to indicate OS name.
@@ -35,16 +36,14 @@
 #.   $ bash k8s-cloudify.sh demo <start|stop>
 #.     demo: control demo blueprint
 #.     start|stop: start or stop the demo
-#.     <k8s-master>: IP or hostname of kubernetes master server
-#.   $ bash k8s-cloudify.sh <start|stop> <name> <blueprint>
+#.   $ bash k8s-cloudify.sh <start|stop> <name> <blueprint> ["inputs"]
 #.     start|stop: start or stop the blueprint
 #.     name: name of the service in the blueprint
+#.     inputs: optional JSON string to pass to Cloudify as deployment inputs
 #.     blueprint: name of the blueprint folder (in current directory!)
-#.     <k8s-master>: IP or hostname of kubernetes master server
 #.   $ bash k8s-cloudify.sh port <service> <k8s-master>
 #.     port: find assigned node_port for service
 #.     service: name of service e.g. nginx
-#.     <k8s-master>: IP or hostname of kubernetes master server
 #.   $ ssh -x <user>@<k8s-master> bash cloudify/k8s-cloudify.sh clean
 #.     <user>: username on the target host. Also used to indicate OS name.
 #.     clean: uninstalls cloudify CLI and Manager
@@ -156,6 +155,12 @@ function setup () {
   done
   cfy status
 
+  log "Setip iptables to forward $HOST_IP port 80 to Cloudify Manager VM at $VM_IP"
+  HOST_IP=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
+  sudo iptables -t nat -I PREROUTING -p tcp -d $HOST_IP --dport 80 -j DNAT --to-destination $VM_IP:80
+  sudo iptables -I FORWARD -m state -d $VM_IP/32 --state NEW,RELATED,ESTABLISHED -j ACCEPT
+  sudo iptables -t nat -A POSTROUTING -j MASQUERADE
+
   log "Install Cloudify Kubernetes Plugin"
   # Per http://docs.getcloudify.org/4.1.0/plugins/container-support/
   # Per https://github.com/cloudify-incubator/cloudify-kubernetes-plugin
@@ -181,19 +186,6 @@ function setup () {
   cfy secrets create -s $(grep 'client-key-data: ' ~/.kube/config \
     | awk -F ' ' '{print $2}') kubernetes-admin_client_key_data
   cfy secrets list
-
-  # get manager VM IP
-  VM_MAC=$(virsh domiflist cloudify-manager | grep default | grep -Eo "[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+:[0-9a-f\]+")
-  VM_IP=$(/usr/sbin/arp -e | grep ${VM_MAC} | awk {'print $1'})
-
-  # get host IP
-  HOST_IP=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
-
-  # Forward host port 80 to VM
-  log "Setip iptables to forward $HOST_IP port 80 to Cloudify Manager VM at $VM_IP"
-  sudo iptables -t nat -I PREROUTING -p tcp -d $HOST_IP --dport 80 -j DNAT --to-destination $VM_IP:80
-  sudo iptables -I FORWARD -m state -d $VM_IP/32 --state NEW,RELATED,ESTABLISHED -j ACCEPT
-  sudo iptables -t nat -A POSTROUTING -j MASQUERADE
 
 # Access to the API via the primary interface, from the local host, is not
 # working for some reason... skip this for now
@@ -238,6 +230,7 @@ function service_port() {
 function start() {
   name=$1
   bp=$2
+  inputs="$3"
   manager_ip=$k8s_master
 
   log "start app $name with blueprint $bp"
@@ -245,58 +238,61 @@ function start() {
   scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
     $k8s_user@$manager_ip:/home/$k8s_user/.kube/config $bp/kube.config
 
-    log "package the blueprint"
-    # CLI: cfy blueprints package -o /tmp/$bp $bp
-    tar ckf /tmp/blueprint.tar $bp
+  log "package the blueprint"
+  # CLI: cfy blueprints package -o /tmp/$bp $bp
+  tar ckf /tmp/blueprint.tar $bp
 
-    log "upload the blueprint"
-    # CLI: cfy blueprints upload -t default_tenant -b $bp /tmp/$bp.tar.gz
-    resp=$(curl -X PUT -s -w "%{http_code}" -o /tmp/json \
-      -u admin:admin --header 'Tenant: default_tenant' \
-      --header "Content-Type: application/octet-stream" \
-      http://$manager_ip/api/v3.1/blueprints/$bp?application_file_name=blueprint.yaml \
-      -T /tmp/blueprint.tar)
-    if [[ "$resp" != "201" ]]; then
-      log "Response: $resp"
-      cat /tmp/json
-      fail "upload failed, response $resp"
-    fi
+  log "upload the blueprint"
+  # CLI: cfy blueprints upload -t default_tenant -b $bp /tmp/$bp.tar.gz
+  resp=$(curl -X PUT -s -w "%{http_code}" -o /tmp/json \
+    -u admin:admin --header 'Tenant: default_tenant' \
+    --header "Content-Type: application/octet-stream" \
+    http://$manager_ip/api/v3.1/blueprints/$bp?application_file_name=blueprint.yaml \
+    -T /tmp/blueprint.tar)
+  if [[ "$resp" != "201" ]]; then
+    log "Response: $resp"
+    cat /tmp/json
+    fail "upload failed, response $resp"
+  fi
 
-    log "create a deployment for the blueprint"
-    # CLI: cfy deployments create -t default_tenant -b $bp $bp
-    resp=$(curl -X PUT -s -w "%{http_code}" -o /tmp/json \
-      -u admin:admin --header 'Tenant: default_tenant' \
-      -w "\nResponse: %{http_code}\n" \
-      --header "Content-Type: application/json" \
-      -d "{\"blueprint_id\": \"$bp\"}" \
-      http://$manager_ip/api/v3.1/deployments/$bp)
-    # response code comes back as "\nResponse: <code>"
-    resp=$(echo $resp | awk '/Response/ {print $2}')
-    if [[ "$resp" != "201" ]]; then
-      log "Response: $resp"
-      cat /tmp/json
-      fail "deployment failed, response $resp"
-    fi
-    sleep 10
+  log "create a deployment for the blueprint"
+  if [[ "$inputs" != "" ]]; then inputs=", \"inputs\": $inputs}"; fi
+  # CLI: cfy deployments create -t default_tenant -b $bp $bp
+  resp=$(curl -X PUT -s -w "%{http_code}" -o /tmp/json \
+    -u admin:admin --header 'Tenant: default_tenant' \
+    -w "\nResponse: %{http_code}\n" \
+    --header "Content-Type: application/json" \
+    -d "{\"blueprint_id\": \"$bp\"$inputs" \
+    http://$manager_ip/api/v3.1/deployments/$bp)
+  # response code comes back as "\nResponse: <code>"
+  resp=$(echo $resp | awk '/Response/ {print $2}')
+  if [[ "$resp" != "201" ]]; then
+    log "Response: $resp"
+    cat /tmp/json
+    fail "deployment failed, response $resp"
+  fi
+  sleep 10
 
-    # CLI: cfy workflows list -d $bp
+  # CLI: cfy workflows list -d $bp
 
-    log "install the deployment pod and service"
-    # CLI: cfy executions start install -d $bp
-    resp=$(curl -X POST -s -w "%{http_code}" -o /tmp/json \
-      -u admin:admin --header 'Tenant: default_tenant' \
-      -w "\nResponse: %{http_code}\n" \
-      --header "Content-Type: application/json" \
-      -d "{\"deployment_id\":\"$bp\", \"workflow_id\":\"install\"}" \
-      http://$manager_ip/api/v3.1/executions)
-    # response code comes back as "\nResponse: <code>"
-    resp=$(echo $resp | awk '/Response/ {print $2}')
-    if [[ "$resp" != "201" ]]; then
-      log "Response: $resp"
-      cat /tmp/json
-      fail "install failed, response $resp"
-    fi
+  log "install the deployment pod and service"
+  # CLI: cfy executions start install -d $bp
+  resp=$(curl -X POST -s -w "%{http_code}" -o /tmp/json \
+    -u admin:admin --header 'Tenant: default_tenant' \
+    -w "\nResponse: %{http_code}\n" \
+    --header "Content-Type: application/json" \
+    -d "{\"deployment_id\":\"$bp\", \"workflow_id\":\"install\"}" \
+    http://$manager_ip/api/v3.1/executions)
+  # response code comes back as "\nResponse: <code>"
+  resp=$(echo $resp | awk '/Response/ {print $2}')
+  if [[ "$resp" != "201" ]]; then
+    log "Response: $resp"
+    cat /tmp/json
+    fail "install failed, response $resp"
+  fi
 
+  # TODO: find a less kludgy way to skip nodeport testing
+  if [[ "$name" != "ves-agent" ]]; then
     log "get the service's assigned node_port"
     port=""
     service_port $name $manager_ip
@@ -307,6 +303,7 @@ function start() {
       sleep 10
     done
     log "service is active at http://$manager_ip:$port"
+  fi
 }
 
 function cancel_executions() {
@@ -446,12 +443,15 @@ function stop() {
     -u admin:admin --header 'Tenant: default_tenant' \
     -o /tmp/json http://$manager_ip/api/v3.1/blueprints/$bp)
   log "Response: $resp"
-  sleep 10
-  log "verify the blueprint is deleted"
-  verify_deleted http://$manager_ip/api/v3.1/blueprints/$bp
-  if [[ "$status" != "not_found_error" ]]; then
-    cat /tmp/json
-    fail "blueprint delete failed"
+
+  if [[ "$response" != "404" ]]; then
+    sleep 10
+    log "verify the blueprint is deleted"
+    verify_deleted http://$manager_ip/api/v3.1/blueprints/$bp
+    if [[ "$status" != "not_found_error" ]]; then
+      cat /tmp/json
+      fail "blueprint delete failed"
+    fi
   fi
   log "blueprint deleted"
 }
@@ -501,7 +501,7 @@ case "$1" in
     ;;
   "start")
     cd ~/models/tools/cloudify/blueprints
-    start $2 $3
+    start $2 $3 "$4"
     cd $WORK_DIR
     ;;
   "stop")

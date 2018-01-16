@@ -176,8 +176,9 @@ ves_loglevel=$ves_loglevel
 export ves_loglevel
 # Can't pass quoted strings in commands
 start=$((`date +%s`/60))
-bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master "$k8s_workers"
-step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master \"$k8s_workers\""
+exit
+bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master "$k8s_workers" cloudify
+step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master \"$k8s_workers\" cloudify"
 
 echo; echo "$0 $(date): All done!"
 deploy_end=$((`date +%s`/60))
