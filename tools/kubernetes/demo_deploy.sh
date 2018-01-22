@@ -77,16 +77,16 @@ deploy_start=$((`date +%s`/60))
 extras=${10}
 
 if [[ "$4" != "$5" ]]; then
-  k8s_master_host=$(echo $1 | cut -d ' ' -f 1)
+  k8s_master_hostname=$(echo $1 | cut -d ' ' -f 1)
 else
-  k8s_master_host=$1
+  k8s_master_hostname=$1
 fi
-cat <<EOF >~/k8s_env_$k8s_master_host.sh
+cat <<EOF >~/k8s_env_$k8s_master_hostname.sh
 k8s_nodes="$1"
 k8s_user=$2
 k8s_key=$3
 k8s_master=$4
-k8s_master_host=$k8s_master_host
+k8s_master_hostname=$k8s_master_hostname
 k8s_workers="$5"
 k8s_priv_net=$6
 k8s_pub_net=$7
@@ -96,14 +96,14 @@ export k8s_nodes
 export k8s_user
 export k8s_key
 export k8s_master
-export k8s_master_host
+export k8s_master_hostname
 export k8s_workers
 export k8s_priv_net
 export k8s_pub_net
 export k8s_ceph_mode
 export k8s_ceph_dev
 EOF
-source ~/k8s_env_$k8s_master_host.sh
+source ~/k8s_env_$k8s_master_hostname.sh
 env | grep k8s_
 
 source ~/models/tools/maas/deploy.sh $k8s_user $k8s_key "$k8s_nodes" $extras
@@ -112,7 +112,7 @@ ssh-add $k8s_key
 scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_key \
   $k8s_user@$k8s_master:/home/$k8s_user/$k8s_key
 scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-  ~/k8s_env_$k8s_master_host.sh $k8s_user@$k8s_master:/home/$k8s_user/k8s_env.sh
+  ~/k8s_env_$k8s_master_hostname.sh $k8s_user@$k8s_master:/home/$k8s_user/k8s_env.sh
 
 echo; echo "$0 $(date): Setting up kubernetes master..."
 scp -r -o UserKnownHostsFile=/dev/null  -o StrictHostKeyChecking=no \
@@ -123,8 +123,8 @@ if [[ "$k8s_master" != "$k8s_workers" ]]; then
   echo; echo "$0 $(date): Setting up kubernetes workers..."
   run_master "bash k8s-cluster.sh workers \"$k8s_workers\""
 else
-  echo; echo "Label $k8s_master_host for role=worker"
-  run_master "kubectl label nodes $k8s_master_host role=worker --overwrite"
+  echo; echo "Label $k8s_master_hostname for role=worker"
+  run_master "kubectl label nodes $k8s_master_hostname role=worker --overwrite"
 fi
 
 echo; echo "$0 $(date): Setting up helm..."
@@ -144,10 +144,10 @@ else
   echo; echo "$0 $(date): Skipping ceph (not yet working for AIO deployment)"
 fi
 
-echo; echo "Setting up Prometheus..."
-scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
-  $k8s_user@$k8s_master:/home/$k8s_user/.
-run_master "bash prometheus-tools.sh setup"
+#echo; echo "Setting up Prometheus..."
+#scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
+#  $k8s_user@$k8s_master:/home/$k8s_user/.
+#run_master "bash prometheus-tools.sh setup"
 
 echo; echo "$0 $(date): Setting up cloudify..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/cloudify \
@@ -164,7 +164,7 @@ if [[ ! -d ~/ves ]]; then
   echo; echo "$0 $(date): Cloning VES"
   git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
 fi
-ves_influxdb_host=$k8s_master:8086
+ves_influxdb_host=$k8s_master:30886
 export ves_influxdb_host
 ves_grafana_host=$k8s_master:30330
 export ves_grafana_host

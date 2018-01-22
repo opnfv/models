@@ -22,7 +22,7 @@
 #. - Password-less ssh key provided for node setup
 #. Usage: on the MAAS server
 #. $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
-#. $ source ~/models/tools/maas/demo_deploy.sh <os> <key> "<hosts>" [<extras>]
+#. $ source ~/models/tools/maas/deploy.sh <os> <key> "<hosts>" [<extras>]
 #. <os>: "xenial" (Ubtuntu Xenial) or "centos" (Centos 7)
 #. <key>: name of private key for cluster node ssh (in current folder)
 #. <hosts>: space separated list of hostnames managed by MAAS
