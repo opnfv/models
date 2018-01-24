@@ -87,6 +87,13 @@ function prereqs() {
   if [[ "$USER" == "ubuntu" ]]; then
     sudo apt-get install -y virtinst qemu-kvm libguestfs-tools virtualenv git \
       python-pip
+    # workaround for virsh default network inactive
+    status=$(sudo virsh net-list --all | awk '/default/ {print $2}')
+    if [[ "$status" == "inactive" ]]; then
+      sudo ifconfig virbr0 down
+      sudo brctl delbr virbr0
+      sudo virsh net-start default
+    fi
   else
     # installing libvirt is needed to ensure default network is pre-created
     sudo yum install -y libvirt 

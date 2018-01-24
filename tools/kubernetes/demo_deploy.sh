@@ -164,32 +164,22 @@ if [[ ! -d ~/ves ]]; then
   echo; echo "$0 $(date): Cloning VES"
   git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
 fi
-ves_influxdb_host=$k8s_master:30886
-export ves_influxdb_host
-ves_grafana_host=$k8s_master:30330
-export ves_grafana_host
-ves_grafana_auth=admin:admin
-export ves_grafana_auth
-ves_kafka_hostname=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master hostname)
-export ves_kafka_hostname
-ves_loglevel=$ves_loglevel
-export ves_loglevel
 # Can't pass quoted strings in commands
 start=$((`date +%s`/60))
-exit
-bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master "$k8s_workers" cloudify
-step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_key $k8s_user $k8s_master \"$k8s_workers\" cloudify"
+bash $HOME/ves/tools/demo_deploy.sh $k8s_user $k8s_master cloudify
+step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_user $k8s_master cloudify"
 
 echo; echo "$0 $(date): All done!"
 deploy_end=$((`date +%s`/60))
 runtime=$((deploy_end-deploy_start))
 log "Deploy \"$1\" duration = $runtime minutes"
 
+source ~/ves/tools/ves_env.sh
 port=$(bash ~/models/tools/cloudify/k8s-cloudify.sh port nginx)
-echo "Prometheus UI is available at http://$k8s_master:30990"
-echo "InfluxDB API is available at http://$ves_influxdb_host/query&db=veseventsdb&q=<string>"
-echo "Grafana dashboards are available at http://$ves_grafana_host (login as $ves_grafana_auth)"
-echo "Grafana API is available at http://$ves_grafana_auth@$ves_grafana_host/api/v1/query?query=<string>"
+#echo "Prometheus UI is available at http://$k8s_master:30990"
+echo "InfluxDB API is available at http://$ves_influxdb_host:$ves_influxdb_port/query&db=veseventsdb&q=<string>"
+echo "Grafana dashboards are available at http://$ves_grafana_host:$ves_grafana_port (login as $ves_grafana_auth)"
+echo "Grafana API is available at http://$ves_grafana_auth@$ves_grafana_host:$ves_grafana_port/api/v1/query?query=<string>"
 echo "Kubernetes API is available at https://$k8s_master:6443/api/v1/"
 echo "Cloudify API access example: curl -u admin:admin --header 'Tenant: default_tenant' http://$k8s_master/api/v3.1/status"
 echo "Cloudify-deployed demo app nginx is available at http://$k8s_master:$port"
