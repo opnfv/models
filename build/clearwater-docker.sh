@@ -42,36 +42,6 @@ function log() {
   echo "$f:$l ($(date)) $1"
 }
 
-function build() {
-  log "Starting clearwater-docker build process"
-  if [[ -d /tmp/clearwater-docker ]]; then rm -rf /tmp/clearwater-docker; fi
-
-  log "Cloning clearwater-docker repo to /tmp/clearwater-docker"
-    git clone https://github.com/Metaswitch/clearwater-docker.git \
-     /tmp/clearwater-docker
-
-  log "Building the images"
-  cd /tmp/clearwater-docker
-  vnfc="base astaire cassandra chronos bono ellis homer homestead homestead-prov ralf sprout"
-  for i in $vnfc ; do 
-    log "Building $i"
-    sudo docker build $cache -t clearwater/$i $i
-  done
-}
-
-function push() {
-  log "push images to docker hub"
-  for i in $vnfc ; do
-    log "Tagging the image as $hub_user/clearwater-$i:$tag"
-    id=$(sudo docker images | grep clearwater/$i | awk '{print $3}')
-    id=$(echo $id | cut -d ' ' -f 1)
-    sudo docker tag $id $hub_user/clearwater-$i:$tag
-
-    log "Pushing the image to dockerhub as $hub_user/clearwater-$i"
-    sudo docker push $hub_user/clearwater-$i
-  done
-}
-
 hub_user=$1
 tag=$2
 cache="$3"
@@ -85,7 +55,36 @@ else
   sudo yum update -y
 fi
 
-build
-push
+if [[ "$cache" == "--no-cache" ]]; then
+  log "Purge old images"
+  images=$(sudo docker images clearwater-* | awk '/clearwater/ {print $1}')
+  for image in $images ; do sudo docker image rm $image; done
+fi
+
+log "Starting clearwater-docker build process"
+if [[ -d /tmp/clearwater-docker ]]; then rm -rf /tmp/clearwater-docker; fi
+
+log "Cloning clearwater-docker repo to /tmp/clearwater-docker"
+git clone --recursive https://github.com/Metaswitch/clearwater-docker.git \
+  /tmp/clearwater-docker
+
+log "Building the images"
+cd /tmp/clearwater-docker
+vnfc="base astaire cassandra chronos bono ellis homer homestead homestead-prov ralf sprout"
+for i in $vnfc ; do 
+  log "Building $i"
+  if [[ "$i" != "base" ]]; then
+    log "Reference $hub_user/clearwater-base:$tag"
+    sed -i -- "s~FROM clearwater/base~FROM $hub_user/clearwater-base:$tag~" \
+      $i/Dockerfile
+  fi
+  sudo docker build $cache -t clearwater-$i $i
+  log "Tagging the image as $hub_user/clearwater-$i:$tag"
+  id=$(sudo docker images | grep "clearwater-$i " | awk '{print $3}')
+  id=$(echo $id | cut -d ' ' -f 1)
+  sudo docker tag $id $hub_user/clearwater-$i:$tag
+  log "Pushing the image to dockerhub as $hub_user/clearwater-$i"
+  sudo docker push $hub_user/clearwater-$i
+done
 
 cd $WORK_DIR

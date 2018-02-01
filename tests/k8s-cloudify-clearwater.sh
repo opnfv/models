@@ -145,9 +145,18 @@ EOF
 kubectl create -f ~/callsip.yaml
 kubectl exec -d --namespace default callsip <<EOF
 apt-get update
-apt-get install -y git netcat
-apt-get install dnsutils -y
+apt-get install -y git netcat dnsutils jq curl
 nslookup bono.default.svc.cluster.local
+
+curl -o /tmp/json -v -H "NGV-Signup-Code: secret" -H "Content-Type: application/json" -d "{\"email\": \"bob@example.com\", \"password\": \"example\", \"full_name\": \"Bob\"}" -X POST "http://ellis.default.svc.cluster.local:80/accounts"
+
+curl -o /tmp/json -v -H "NGV-API-Key: secret" -X POST http://ellis.default.svc.cluster.local:80/accounts/bob@example.com/numbers/
+
+curl -o /tmp/json -v -H "Content-Type: application/json" -d "{\"email\": \"bob@example.com\", \"password\": \"example\"}" -X POST "http://ellis.default.svc.cluster.local:80/session"
+
+
+curl -H "NGV-API-Key: secret" -H "Content-Type: application/json" -d "{\"private_id\": \"sip:bob@example.com\", \"new_private_id\": \"true\"}" -X POST http://ellis.default.svc.cluster.local:80/accounts/bob@example.com/numbers/sip:1@example.com
+
 git clone https://github.com/rundekugel/callSip.sh.git
 while true ; do
   bash /callSip.sh/src/callSip.sh -v 4 -p 5060 -d 10 -s bono.default.svc.cluster.local -c bob@example.com alice@example.com
