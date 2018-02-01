@@ -125,43 +125,39 @@ EOF
 
 function run_test() {
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-    $k8s_user@$k8s_master <<EOG
-cat <<EOF >~/callsip.yaml
+    $k8s_user@$k8s_master <<'EOG'
+cat <<EOF >~/clearwater-live-test.yaml
 apiVersion: v1
 kind: Pod
 metadata:
-  name: callsip
+  name: clearwater-live-test
   namespace: default
 spec:
   containers:
-  - name: callsip
-    image: ubuntu
+  - name: clearwater-live-test
+    image: blsaws/clearwater-live-test:stable
     command:
       - sleep
       - "3600"
     imagePullPolicy: IfNotPresent
+    volumeMounts:
+    - mountPath: /tmp
+      name: tmp
+  volumes:
+  - name: tmp
+    hostPath:
+      path: /tmp
   restartPolicy: Always
 EOF
-kubectl create -f ~/callsip.yaml
-kubectl exec -d --namespace default callsip <<EOF
-apt-get update
-apt-get install -y git netcat dnsutils jq curl
-nslookup bono.default.svc.cluster.local
-
-curl -o /tmp/json -v -H "NGV-Signup-Code: secret" -H "Content-Type: application/json" -d "{\"email\": \"bob@example.com\", \"password\": \"example\", \"full_name\": \"Bob\"}" -X POST "http://ellis.default.svc.cluster.local:80/accounts"
-
-curl -o /tmp/json -v -H "NGV-API-Key: secret" -X POST http://ellis.default.svc.cluster.local:80/accounts/bob@example.com/numbers/
-
-curl -o /tmp/json -v -H "Content-Type: application/json" -d "{\"email\": \"bob@example.com\", \"password\": \"example\"}" -X POST "http://ellis.default.svc.cluster.local:80/session"
-
-
-curl -H "NGV-API-Key: secret" -H "Content-Type: application/json" -d "{\"private_id\": \"sip:bob@example.com\", \"new_private_id\": \"true\"}" -X POST http://ellis.default.svc.cluster.local:80/accounts/bob@example.com/numbers/sip:1@example.com
-
-git clone https://github.com/rundekugel/callSip.sh.git
-while true ; do
-  bash /callSip.sh/src/callSip.sh -v 4 -p 5060 -d 10 -s bono.default.svc.cluster.local -c bob@example.com alice@example.com
+kubectl create -f ~/clearwater-live-test.yaml
+status=$(kubectl get pods -o json --namespace default clearwater-live-test | jq -r '.status.phase')
+while [[ "$status" != "Running" ]]; do
+  echo; echo "clearwater-live-test is $status ... waiting 10 seconds"
+  sleep 10
+  status=$(kubectl get pods -o json --namespace default clearwater-live-test | jq -r '.status.phase')
 done
-EOF
+kubectl exec -t --namespace default clearwater-live-test rake test[default.svc.cluster.local] SIGNUP_CODE=secret  PROXY=bono.default.svc.cluster.local
+kubectl delete pods --namespace default clearwater-live-test
 EOG
 }
 
