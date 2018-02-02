@@ -1,0 +1,112 @@
+Title: High-level flow for the OPNFV Models+VES demo deployment.
+# (c) 2018 AT&T Intellectual Property, Inc
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# To generate the flow, browse to https://bramp.github.io/js-sequence-diagrams/,
+# select Theme "Simple", and paste the content of this file into the editor.
+
+participant Admin Server as admin
+participant k8s master as k8s_master
+participant k8s worker as k8s_worker
+participant Cloudify Manager as cloudify
+participant k8s pods as k8s_pod
+participant Barometer as barometer
+participant Kafka\nZookeeper as kafka
+participant VES Agent as agent
+participant VES Collector as collector
+participant InfluxDB as influxdb
+participant Grafana as grafana
+Note over admin, grafana: For brevity, action/api responses are not shown (flow continuation indicates success).
+admin->k8s_master: deploy host OS
+admin->k8s_worker: deploy host OS
+admin->k8s_master: (SSH) install k8s master
+note over k8s_master: install k8s and\nkube-system pods
+admin->k8s_master: (SSH) install k8s workers
+k8s_master->k8s_worker: (SSH) install k8s worker
+k8s_worker->k8s_master: (api) register as worker
+admin->k8s_master: (SSH) install helm
+admin->k8s_master: (SSH) test helm chart (nginx)
+k8s_master->k8s_worker: (k8s) start nginx pod
+note over k8s_pod: (nginx pod)
+k8s_worker->k8s_pod: create pod
+k8s_master->k8s_pod: GET http://(nginx-service)
+k8s_master->k8s_worker: (k8s) stop nginx pod
+k8s_worker->k8s_pod: delete pod
+admin->k8s_master: (SSH) deploy ceph-docker\nhelm chart
+k8s_master->k8s_worker: (k8s) install ceph-docker
+admin->k8s_master: (SSH) test helm chart with\n ceph PVC (dokuwiki)
+k8s_master->k8s_worker: (k8s) start dokuwiki pod
+note over k8s_pod: (dokuwiki pod)
+k8s_worker->k8s_pod: create pod
+k8s_master->k8s_pod: GET http://(dokuwiki-service)
+note over k8s_worker: (k8s worker)
+admin->k8s_master: (SSH) install cloudify manager
+note over k8s_master: install cloudify CLI
+note over cloudify: (on k8s master)
+k8s_master->cloudify: create cloudify manager VM
+k8s_master->cloudify: (cfy cli) install cloudify k8s plugin
+admin->cloudify: (api) upload/deploy cloudify-k8s chart (nginx)
+cloudify->k8s_master: (api) deploy nginx chart
+k8s_master->k8s_worker: (k8s) start nginx pod
+note over k8s_pod: (nginx pod)
+k8s_worker->k8s_pod: create pod
+admin->k8s_pod: GET http://(nginx-service)
+admin->cloudify: (api) upload/deploy ves-influxdb chart
+cloudify->k8s_master: (api) deploy ves-influxdb chart
+k8s_master->k8s_worker: (k8s) start ves-influxdb pod
+k8s_worker->influxdb: create pod (type=ClusterIP,port=8086)
+admin->influxdb: (api) create veseventsdb
+admin->cloudify: (api) upload/deploy grafana chart
+cloudify->k8s_master: (api) deploy grafana chart
+k8s_master->k8s_worker: (k8s) start grafana pod
+k8s_worker->grafana: create pod (type=NodePort,port=30300)
+admin->grafana: create VESEvents datasource
+note over grafana: (repeat on\nupdate schedule)
+grafana->influxdb: (api)\nquery veseventsdb
+admin->grafana: create VES dashboard
+note over grafana: display stats\non dashboard
+admin->cloudify: (api) upload/deploy ves-collector chart
+cloudify->k8s_master: (api) deploy ves-collector chart
+k8s_master->k8s_worker: (k8s) start ves-collector pod
+k8s_worker->collector: create pod (type=ClusterIP,port=3001)
+admin->cloudify: (api) upload/deploy ves-zookeeper chart
+cloudify->k8s_master: (api) deploy ves-zookeeper chart
+k8s_master->k8s_worker: (k8s) start ves-zookeeper pod
+note over kafka: (zookeeper pod)
+k8s_worker->kafka: create pod (type=ClusterIP,port=2181)
+admin->cloudify: (api) upload/deploy ves-kafka chart
+cloudify->k8s_master: (api) deploy ves-kafka chart
+k8s_master->k8s_worker: (k8s) start ves-kafka pod
+note over kafka: (kafka pod)
+k8s_worker->kafka: create pod (type=NodePort,port=30992)
+note over kafka: NodePort required\nfor barometer
+admin->cloudify: (api) upload/deploy ves-agent chart
+cloudify->k8s_master: (api) deploy ves-agent chart
+k8s_master->k8s_worker: (k8s) start ves-agent pod
+k8s_worker->agent: create pod
+admin->k8s_master: (SSH) install barometer container
+note over barometer: (on k8s master)
+k8s_master->barometer: create barometer container
+barometer->kafka: (api) register\n"collectd" topic
+note over kafka: configure topic\nvia zookeeper
+admin->k8s_worker: (SSH) install barometer container
+note over barometer: (on k8s worker)
+k8s_worker->barometer: create barometer container
+barometer->kafka: (api) register\n"collectd" topic
+note over kafka: (api) configure topic\nvia zookeeper
+note over barometer: (on k8s master\nand workers,\nper schedule)
+barometer->kafka: (api) publish\ncollectd stats
+kafka->agent: (api)\ncollectd stats
+agent->collector: (api) VES event
+collector->influxdb: (api)\nveseventsdb entry
