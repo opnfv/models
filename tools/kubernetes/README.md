@@ -51,3 +51,7 @@ This is a work in progress!
 
 ![Resulting Cluster](/docs/images/models-k8s.png?raw=true "Resulting Cluster")
 
+The flow for this demo deployment is illustrated below.
+
+![models_demo_flow.svg](/docs/images/models_demo_flow.svg?raw=true "models_demo_flow.svg")
+
