@@ -53,5 +53,5 @@ This is a work in progress!
 
 The flow for this demo deployment is illustrated below.
 
-![models_demo_flow.svg](/docs/images/models_demo_flow.svg?raw=true "models_demo_flow.svg")
+![models_demo_flow.svg](/docs/images/models_demo_flow.svg "models_demo_flow.svg")
 
