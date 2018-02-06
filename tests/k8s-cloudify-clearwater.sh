@@ -121,6 +121,41 @@ sed -i -- "/port: 80/a\ \ \ \ nodePort: 30880"  ellis-svc.yaml
 echo "deploying"
 kubectl apply -f ../kubernetes
 EOF
+
+  log "workaround bug in homestead-prov"
+  ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+    $k8s_user@$k8s_master <<'EOF'
+hpod=$(kubectl get pods --namespace default | grep -v homestead-prov | awk '/homestead/ {print $1}')
+status=$(kubectl get pods -o json --namespace default $hpod | jq -r '.status.phase')
+while [[ "$status" != "Running" ]]; do
+  echo "homestead is $status ... waiting 10 seconds"
+  sleep 10
+  status=$(kubectl get pods -o json --namespace default $hpod | jq -r '.status.phase')
+done
+kubectl cp $hpod:/usr/share/clearwater/bin/clearwater-socket-factory-sig-wrapper /tmp/clearwater-socket-factory-sig-wrapper -c homestead
+kubectl cp $hpod:/usr/share/clearwater/bin/clearwater-socket-factory-mgmt-wrapper /tmp/clearwater-socket-factory-mgmt-wrapper -c homestead
+kubectl delete deployment --namespace default homestead-prov
+kubectl delete service --namespace default homestead-prov
+cd clearwater-docker/kubernetes
+kubectl apply -f homestead-prov-depl.yaml
+kubectl apply -f homestead-prov-svc.yaml
+
+hppod="null"
+while [[ "$hppod" == "null" ]] ; do
+  echo "homestead-prov pod is not yet created... waiting 10 seconds"
+  sleep 10
+  hppod=$(kubectl get pods --namespace default | awk '/homestead-prov/ {print $1}')
+done
+status=$(kubectl get pods -o json --namespace default $hppod | jq -r '.status.phase')
+while [[ "$status" != "Running" ]]; do
+  echo; echo "$hppod is $status ... waiting 10 seconds"
+  sleep 10
+  status=$(kubectl get pods -o json --namespace default $hppod | jq -r '.status.phase')
+done
+
+kubectl cp /tmp/clearwater-socket-factory-sig-wrapper $hppod:/usr/share/clearwater/bin/clearwater-socket-factory-sig-wrapper  -c homestead-prov
+kubectl cp /tmp/clearwater-socket-factory-mgmt-wrapper $hppod://usr/share/clearwater/bin/clearwater-socket-factory-mgmt-wrapper -c homestead-prov
+EOF
 }
 
 function run_test() {
