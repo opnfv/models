@@ -56,12 +56,12 @@ else
 fi
 
 log "Starting clearwater-live-test build process"
-if [[ -d /tmp/clearwater-live-test ]]; then rm -rf /tmp/clearwater-live-test; fi
+if [[ -d ~/tmp/clearwater-live-test ]]; then rm -rf ~/tmp/clearwater-live-test; fi
 
-log "Cloning clearwater-live-test repo to /tmp/clearwater-live-test"
+log "Cloning clearwater-live-test repo to ~/tmp/clearwater-live-test"
 git clone --recursive https://github.com/Metaswitch/clearwater-live-test.git \
-  /tmp/clearwater-live-test
-cd /tmp/clearwater-live-test
+  ~/tmp/clearwater-live-test
+cd ~/tmp/clearwater-live-test
 
 log "Building the image"
 sudo docker build $cache -t clearwater/clearwater-live-test .

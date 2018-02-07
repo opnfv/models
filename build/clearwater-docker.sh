@@ -62,14 +62,14 @@ if [[ "$cache" == "--no-cache" ]]; then
 fi
 
 log "Starting clearwater-docker build process"
-if [[ -d /tmp/clearwater-docker ]]; then rm -rf /tmp/clearwater-docker; fi
+if [[ -d ~/tmp/clearwater-docker ]]; then rm -rf ~/tmp/clearwater-docker; fi
 
-log "Cloning clearwater-docker repo to /tmp/clearwater-docker"
+log "Cloning clearwater-docker repo to ~/tmp/clearwater-docker"
 git clone --recursive https://github.com/Metaswitch/clearwater-docker.git \
-  /tmp/clearwater-docker
+  ~/tmp/clearwater-docker
 
 log "Building the images"
-cd /tmp/clearwater-docker
+cd ~/tmp/clearwater-docker
 vnfc="base astaire cassandra chronos bono ellis homer homestead homestead-prov ralf sprout"
 for i in $vnfc ; do 
   log "Building $i"
