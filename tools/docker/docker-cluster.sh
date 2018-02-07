@@ -46,12 +46,12 @@ function log() {
 # Setup master and worker hosts
 function setup() {
   # Per https://docs.docker.com/engine/swarm/swarm-tutorial/
-  cat >/tmp/env.sh <<EOF
+  cat >~/tmp/env.sh <<EOF
 master=$1
 workers="$2"
 EOF
-  source /tmp/env.sh
-  cat >/tmp/prereqs.sh <<'EOF'
+  source ~/tmp/env.sh
+  cat >~/tmp/prereqs.sh <<'EOF'
 #!/bin/bash
 # Per https://docs.docker.com/engine/installation/linux/docker-ce/ubuntu/
 sudo apt-get remove -y docker docker-engine docker.io docker-ce
@@ -75,7 +75,7 @@ EOF
 
   # jq is used for parsing API reponses
   sudo apt-get install -y jq
-  scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/prereqs.sh ubuntu@$master:/home/ubuntu/prereqs.sh
+  scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ~/tmp/prereqs.sh ubuntu@$master:/home/ubuntu/prereqs.sh
   ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$master bash /home/ubuntu/prereqs.sh
   # activate docker API
   # Per https://www.ivankrizsan.se/2016/05/18/enabling-docker-remote-api-on-ubuntu-16-04/
@@ -97,7 +97,7 @@ EOF
   token=$(ssh -o StrictHostKeyChecking=no -x ubuntu@$master sudo docker swarm join-token worker | grep docker)
   for worker in $workers; do
     log "setting up worker at $worker"
-    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /tmp/prereqs.sh ubuntu@$worker:/home/ubuntu/.
+    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ~/tmp/prereqs.sh ubuntu@$worker:/home/ubuntu/.
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$worker bash /home/ubuntu/prereqs.sh
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$worker sudo $token
   done
@@ -112,7 +112,7 @@ function create_service() {
   log "creating service $1 with $2 replicas"
   # sudo docker service create -p 80:80 --replicas $reps --name nginx nginx
   # per https://docs.docker.com/engine/api/v1.27/
-  source /tmp/env.sh
+  source ~/tmp/env.sh
   case "$1" in
     nginx)
       match="Welcome to nginx!"
@@ -131,7 +131,7 @@ function create_service() {
 
 function check_service() {
   log "checking service state for $1 with match string $2"
-  source /tmp/env.sh
+  source ~/tmp/env.sh
   service=$1
   match="$2"
   services=$(curl http://$master:4243/services)
@@ -144,12 +144,12 @@ function check_service() {
       nodes="$master $workers"
       for node in $nodes; do
         not=""
-        while ! curl -s -o /tmp/resp http://$node:$port ; do
+        while ! curl -s -o ~/tmp/resp http://$node:$port ; do
           log "service is not yet active, waiting 10 seconds"
           sleep 10
         done
-        curl -s -o /tmp/resp http://$node:$port
-        if [[ $(grep -c "$match" /tmp/resp) == 0 ]]; then
+        curl -s -o ~/tmp/resp http://$node:$port
+        if [[ $(grep -c "$match" ~/tmp/resp) == 0 ]]; then
           not="NOT"
         fi
         echo "$service service is $not active at address http://$node:$port"
@@ -162,7 +162,7 @@ function check_service() {
 
 function delete_service() {
   log "deleting service $1"
-  source /tmp/env.sh
+  source ~/tmp/env.sh
   service=$1
   services=$(curl http://$master:4243/services)
   n=$(echo $services | jq '. | length')
@@ -183,7 +183,7 @@ function delete_service() {
 
 # Clean the installation
 function clean() {
-  source /tmp/env.sh
+  source ~/tmp/env.sh
   nodes="$master $workers"
   for node in $nodes; do
     ssh -o StrictHostKeyChecking=no -x ubuntu@$node <<EOF
