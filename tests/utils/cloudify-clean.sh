@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2015-2016 AT&T Intellectual Property, Inc
+# Copyright 2015-2018 AT&T Intellectual Property, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 # Status: this is a work in progress, under test.#
 #
 # Prerequisites:
-#   $ bash /tmp/cloudify/cloudify-setup.sh
+#   $ bash cloudify-setup.sh
 #
 # How to use:
 #   $ bash cloudify-clean.sh
@@ -31,12 +31,12 @@
 # flip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${flip[@]}; do neutron floatingip-delete ${id}; done
 
 function setenv () {
-mkdir -p /tmp/cloudify
+mkdir -p ~/tmp/cloudify
 if [ "$dist" == "Ubuntu" ]; then
   echo "cloudify-clean.sh: Ubuntu-based install"
   echo "cloudify-clean.sh: Create the environment file"
   KEYSTONE_HOST=$(juju status --format=short | awk "/keystone\/0/ { print \$3 }")
-  cat <<EOF >/tmp/cloudify/admin-openrc.sh
+  cat <<EOF >~/tmp/cloudify/admin-openrc.sh
 export CONGRESS_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
 export HORIZON_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
 export KEYSTONE_HOST=$KEYSTONE_HOST
@@ -59,7 +59,7 @@ else
   echo "cloudify-clean.sh: Get address of Controller node"
   export CONTROLLER_HOST1=$(openstack server list | awk "/overcloud-controller-0/ { print \$8 }" | sed 's/ctlplane=//g')
   echo "cloudify-clean.sh: Create the environment file"
-  cat <<EOF >/tmp/cloudify/admin-openrc.sh
+  cat <<EOF >~/tmp/cloudify/admin-openrc.sh
 export CONGRESS_HOST=$CONTROLLER_HOST1
 export KEYSTONE_HOST=$CONTROLLER_HOST1
 export CEILOMETER_HOST=$CONTROLLER_HOST1
@@ -68,16 +68,16 @@ export GLANCE_HOST=$CONTROLLER_HOST1
 export NEUTRON_HOST=$CONTROLLER_HOST1
 export NOVA_HOST=$CONTROLLER_HOST1
 EOF
-  cat ~/overcloudrc >>/tmp/cloudify/admin-openrc.sh
+  cat ~/overcloudrc >>~/tmp/cloudify/admin-openrc.sh
   source ~/overcloudrc
   export OS_REGION_NAME=$(openstack endpoint list | awk "/ nova / { print \$4 }")
   # sed command below is a workaound for a bug - region shows up twice for some reason
-  cat <<EOF | sed '$d' >>/tmp/cloudify/admin-openrc.sh
+  cat <<EOF | sed '$d' >>~/tmp/cloudify/admin-openrc.sh
 export OS_REGION_NAME=$OS_REGION_NAME
 EOF
 fi
 
-source /tmp/cloudify/admin-openrc.sh
+source ~/tmp/cloudify/admin-openrc.sh
 }
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`
