@@ -180,7 +180,7 @@ function setup_k8s_master() {
   sudo kubeadm reset
   # Start cluster
   log "Start the cluster"
-  sudo kubeadm init --pod-network-cidr=192.168.0.0/16 >>~~/tmp/kubeadm.out
+  sudo kubeadm init --pod-network-cidr=192.168.0.0/16 >>~/tmp/kubeadm.out
   cat ~/tmp/kubeadm.out
   export k8s_joincmd=$(grep "kubeadm join" ~/tmp/kubeadm.out)
   log "Cluster join command for manual use if needed: $k8s_joincmd"
