@@ -150,7 +150,7 @@ parameters:
 EOF
   # TODO: find out where in the above ~/.kube folders became owned by root
   sudo chown -R ubuntu:ubuntu ~/.kube/*
-  kubectl create -f /tmp/ceph-sc.yaml
+  kubectl create -f ~/tmp/ceph-sc.yaml
 
   log "Create storage pool 'kube'"
   # https://github.com/kubernetes/examples/blob/master/staging/persistent-volume-provisioning/README.md method
@@ -189,7 +189,7 @@ EOF
   }
 }
 EOF
-  kubectl create -f /tmp/ceph-pvc.yaml
+  kubectl create -f ~/tmp/ceph-pvc.yaml
   while [[ "x$(kubectl get pvc -o jsonpath='{.status.phase}' claim1)" != "xBound" ]]; do
     log "Waiting for pvc claim1 to be 'Bound'"
     kubectl describe pvc

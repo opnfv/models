@@ -19,7 +19,7 @@
 # Status: this is a work in progress, under test.#
 #
 # Prerequisites:
-#   $ bash /tmp/cloudify/cloudify-setup.sh
+#   $ bash ~/tmp/cloudify/cloudify-setup.sh
 #
 # How to use:
 #   $ bash cloudify-clean.sh
@@ -31,7 +31,7 @@
 # flip=($(neutron floatingip-list|grep -v "+"|grep -v id|awk '{print $2}')); for id in ${flip[@]}; do neutron floatingip-delete ${id}; done
 
 function setenv () {
-mkdir -p /tmp/cloudify
+mkdir -p ~/tmp/cloudify
 if [ "$dist" == "Ubuntu" ]; then
   echo "cloudify-clean.sh: Ubuntu-based install"
   echo "cloudify-clean.sh: Create the environment file"
@@ -77,7 +77,7 @@ export OS_REGION_NAME=$OS_REGION_NAME
 EOF
 fi
 
-source /tmp/cloudify/admin-openrc.sh
+source ~/tmp/cloudify/admin-openrc.sh
 }
 
 dist=`grep DISTRIB_ID /etc/*-release | awk -F '=' '{print $2}'`

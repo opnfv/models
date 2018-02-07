@@ -64,17 +64,17 @@ function setup_prometheus() {
     --set server.service.type=NodePort \
     --set server.persistentVolume.enabled=false
 
-  while ! curl -o /tmp/up http://$host_ip:30990/api/v1/query?query=up ; do
+  while ! curl -o ~/tmp/up http://$host_ip:30990/api/v1/query?query=up ; do
     log "Prometheus API is not yet responding... waiting 10 seconds"
     sleep 10
   done
 
-  exp=$(jq '.data.result|length' /tmp/up)
+  exp=$(jq '.data.result|length' ~/tmp/up)
   log "$exp exporters are up"
   while [[ $exp -gt 0 ]]; do
     ((exp--))
-    eip=$(jq -r ".data.result[$exp].metric.instance" /tmp/up)
-    job=$(jq -r ".data.result[$exp].metric.job" /tmp/up)
+    eip=$(jq -r ".data.result[$exp].metric.instance" ~/tmp/up)
+    job=$(jq -r ".data.result[$exp].metric.job" ~/tmp/up)
     log "$job at $eip"
   done
   log "Prometheus dashboard is available at http://$host_ip:30990"
@@ -108,11 +108,11 @@ function setup_grafana() {
 "url":"http://$prometheus_ip:30990/", "basicAuth":false,"isDefault":true, \
 "user":"", "password":"" }
 EOF
-  curl -X POST -o /tmp/json -u admin:admin -H "Accept: application/json" \
+  curl -X POST -o ~/tmp/json -u admin:admin -H "Accept: application/json" \
     -H "Content-type: application/json" \
     -d @datasources.json http://admin:admin@$grafana_ip:30330/api/datasources
 
-  if [[ "$(jq -r '.message' /tmp/json)" != "Datasource added" ]]; then
+  if [[ "$(jq -r '.message' ~/tmp/json)" != "Datasource added" ]]; then
     fail "Datasource creation failed"
   fi
   log "Prometheus datasource for Grafana added"
@@ -161,4 +161,4 @@ case "$1" in
   *)
     grep '#. ' $0
 esac
-cat /tmp/summary
+cat ~/tmp/summary

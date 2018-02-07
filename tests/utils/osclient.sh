@@ -21,7 +21,7 @@
 # scripts to DevStack or an OpenStack installation (see below). You can also
 # attach to the OSC container. Enter "sudo docker attach osclient" then hit enter
 # twice and you will be in the container as root (there are no other users).
-# Once in the container, you can "source /tmp/osclient/admin-openrc.sh" and use
+# Once in the container, you can "source ~/tmp/osclient/admin-openrc.sh" and use
 # any OSC commands you want.
 #
 # Status: this is a work in progress, under test.
@@ -55,15 +55,15 @@
 # To run tests in the container:
 #  1) Copy the tests to the shared folder for the container (/tmp/osclient)
 #  2) Run your tests; for example, if you want to run Copper tests:
-#     $ bash ~/git/models/tests/utils/osclient.sh run "bash /tmp/osclient/copper/tests/network_bridging.sh"
-#     $ bash ~/git/models/tests/utils/osclient.sh run "bash /tmp/osclient/copper/tests/network_bridging-clean.sh"
+#     $ bash ~/git/models/tests/utils/osclient.sh run "bash ~/tmp/osclient/copper/tests/network_bridging.sh"
+#     $ bash ~/git/models/tests/utils/osclient.sh run "bash ~/tmp/osclient/copper/tests/network_bridging-clean.sh"
 #  3) Due to a (?) Docker quirk, you need to remove and re-copy the tests each time you change them, e.g. as you edit the tests during development
-#     $ rm -rf /tmp/osclient/copper/tests/; cp -R ~/git/copper/tests/ /tmp/osclient/copper/tests/
+#     $ rm -rf ~/tmp/osclient/copper/tests/; cp -R ~/git/copper/tests/ ~/tmp/osclient/copper/tests/
 #
 # To stop and then remove the Docker container
 #   $ bash osclient.sh clean
 #     * clean: remove the osclient container and shared folder
-#     Note: you may have to run as sudo in order to delete the files in /tmp/osclient
+#     Note: you may have to run as sudo in order to delete the files in ~/tmp/osclient
 
 
 trap 'fail' ERR
@@ -103,10 +103,10 @@ function create_container() {
     # xenial is needed for python 3.5
     sudo docker pull ubuntu:xenial
     sudo service docker start
-    sudo docker run -i -t -d -v /tmp/osclient/:/tmp/osclient --name osclient \
+    sudo docker run -i -t -d -v ~/tmp/osclient/:/tmp/osclient --name osclient \
       ubuntu:xenial /bin/bash
-    sudo docker exec osclient /bin/bash /tmp/osclient/osclient-setup.sh \
-      setup /tmp/osclient/admin-openrc.sh $branch
+    sudo docker exec osclient /bin/bash ~/tmp/osclient/osclient-setup.sh \
+      setup ~/tmp/osclient/admin-openrc.sh $branch
   else
     # Centos
     echo "Centos-based install"
@@ -122,10 +122,10 @@ EOF
     # xenial is needed for python 3.5
     sudo service docker start
     sudo docker pull ubuntu:xenial
-    sudo docker run -i -t -d -v /tmp/osclient/:/tmp/osclient --name osclient \
+    sudo docker run -i -t -d -v ~/tmp/osclient/:/tmp/osclient --name osclient \
       ubuntu:xenial /bin/bash
-    sudo docker exec osclient /bin/bash /tmp/osclient/osclient-setup.sh setup \
-      /tmp/osclient/admin-openrc.sh $branch
+    sudo docker exec osclient /bin/bash ~/tmp/osclient/osclient-setup.sh setup \
+      ~/tmp/osclient/admin-openrc.sh $branch
   fi
 }
 
@@ -150,7 +150,7 @@ function setup () {
   apt-get install -y libffi-dev
   apt-get install -y libssl-dev
 
-  cd /tmp/osclient
+  cd ~/tmp/osclient
 
   echo "$0: $(date) Upgrage pip"
   pip install --upgrade pip
@@ -181,26 +181,26 @@ case "$1" in
       setup $openrc $branch
     else
       echo "$0: $(date) Setup shared virtual folder and save $1 script there"
-      if [[ ! -d /tmp/osclient ]]; then mkdir /tmp/osclient; fi
-      cp $0 /tmp/osclient/osclient-setup.sh
-      cp $openrc /tmp/osclient/admin-openrc.sh
-      chmod 755 /tmp/osclient/*.sh
+      if [[ ! -d ~/tmp/osclient ]]; then mkdir ~/tmp/osclient; fi
+      cp $0 ~/tmp/osclient/osclient-setup.sh
+      cp $openrc ~/tmp/osclient/admin-openrc.sh
+      chmod 755 ~/tmp/osclient/*.sh
       create_container
     fi
     pass
     ;;
   run)
     cat >/tmp/osclient/command.sh <<EOF
-source /tmp/osclient/admin-openrc.sh
+source ~/tmp/osclient/admin-openrc.sh
 $2
 exit
 EOF
-    sudo docker exec osclient /bin/bash /tmp/osclient/command.sh "$0"
+    sudo docker exec osclient /bin/bash ~/tmp/osclient/command.sh "$0"
     ;;
   clean)
     sudo docker stop osclient
     sudo docker rm -v osclient
-    rm -rf /tmp/osclient
+    rm -rf ~/tmp/osclient
     pass
     ;;
   *)

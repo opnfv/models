@@ -149,7 +149,7 @@ function setup () {
   sudo systemctl start libvirtd
   if [[ "$USER" == "centos" ]]; then
     # copy image to folder that qemu has access to, to avoid: ERROR    Cannot access storage file '/home/centos/cloudify/cloudify-manager-community-17.9.21.qcow2' (as uid:107, gid:107): Permission denied
-    cp cloudify-manager-community-17.9.21.qcow2 /tmp/.
+    cp cloudify-manager-community-17.9.21.qcow2 ~/tmp/.
     img="/tmp/cloudify-manager-community-17.9.21.qcow2"
   else
     img="cloudify-manager-community-17.9.21.qcow2"
@@ -233,15 +233,15 @@ function cluster_ip() {
   clusterIp="null"
   while [[ "$clusterIp" == "null" && $tries -gt 0 ]]; do
     curl -s -u admin:admin --header 'Tenant: default_tenant' \
-      -o /tmp/json http://$k8s_master/api/v3.1/node-instances
-    ni=$(jq -r '.items | length' /tmp/json)
+      -o ~/tmp/json http://$k8s_master/api/v3.1/node-instances
+    ni=$(jq -r '.items | length' ~/tmp/json)
     while [[ $ni -ge 0 ]]; do
       ((ni--))
-      depid=$(jq -r ".items[$ni].deployment_id" /tmp/json)
-      type=$(jq -r ".items[$ni].runtime_properties.kubernetes.kind" /tmp/json)
+      depid=$(jq -r ".items[$ni].deployment_id" ~/tmp/json)
+      type=$(jq -r ".items[$ni].runtime_properties.kubernetes.kind" ~/tmp/json)
       if [[ "$depid" == "$name" && "$type" == "Service" ]]; then
         svcId=$ni
-        clusterIp=$(jq -r ".items[$ni].runtime_properties.kubernetes.spec.cluster_ip" /tmp/json)
+        clusterIp=$(jq -r ".items[$ni].runtime_properties.kubernetes.spec.cluster_ip" ~/tmp/json)
         if [[ "$clusterIp" != "null" ]]; then
           echo "clusterIp=$clusterIp"
           export clusterIp
@@ -253,7 +253,7 @@ function cluster_ip() {
   done
   if [[ "$clusterIp" == "null" ]]; then
     log "node-instance resource for $name"
-    jq -r ".items[$svcId]" /tmp/json
+    jq -r ".items[$svcId]" ~/tmp/json
     log "clusterIp not found for service"
   fi
 }
@@ -267,15 +267,15 @@ function node_port() {
   nodePort="null"
   while [[ "$nodePort" == "null" && $tries -gt 0 ]]; do
     curl -s -u admin:admin --header 'Tenant: default_tenant' \
-      -o /tmp/json http://$k8s_master/api/v3.1/node-instances
-    ni=$(jq -r '.items | length' /tmp/json)
+      -o ~/tmp/json http://$k8s_master/api/v3.1/node-instances
+    ni=$(jq -r '.items | length' ~/tmp/json)
     while [[ $ni -ge 0 ]]; do
       ((ni--))
-      depid=$(jq -r ".items[$ni].deployment_id" /tmp/json)
-      type=$(jq -r ".items[$ni].runtime_properties.kubernetes.kind" /tmp/json)
+      depid=$(jq -r ".items[$ni].deployment_id" ~/tmp/json)
+      type=$(jq -r ".items[$ni].runtime_properties.kubernetes.kind" ~/tmp/json)
       if [[ "$depid" == "$name" && "$type" == "Service" ]]; then
         svcId=$ni
-        nodePort=$(jq -r ".items[$ni].runtime_properties.kubernetes.spec.ports[0].node_port" /tmp/json)
+        nodePort=$(jq -r ".items[$ni].runtime_properties.kubernetes.spec.ports[0].node_port" ~/tmp/json)
         if [[ "$nodePort" != "null" ]]; then
           echo "nodePort=$nodePort"
           export nodePort
@@ -287,7 +287,7 @@ function node_port() {
   done
   if [[ "$nodePort" == "null" ]]; then
     log "node-instance resource for $name"
-    jq -r ".items[$svcId]" /tmp/json
+    jq -r ".items[$svcId]" ~/tmp/json
     log "nodePort not found for service"
   fi
 }
@@ -299,15 +299,15 @@ function wait_terminated() {
   status=""
   while [[ "$status" != "terminated" ]]; do
     curl -s -u admin:admin --header 'Tenant: default_tenant' \
-      -o /tmp/json http://$k8s_master/api/v3.1/executions
-    ni=$(jq -r '.items | length' /tmp/json)
+      -o ~/tmp/json http://$k8s_master/api/v3.1/executions
+    ni=$(jq -r '.items | length' ~/tmp/json)
     while [[ $ni -ge 0 ]]; do
       ((ni--))
-      depid=$(jq -r ".items[$ni].deployment_id" /tmp/json)
-      wflid=$(jq -r ".items[$ni].workflow_id" /tmp/json)
-      status=$(jq -r ".items[$ni].status" /tmp/json)
+      depid=$(jq -r ".items[$ni].deployment_id" ~/tmp/json)
+      wflid=$(jq -r ".items[$ni].workflow_id" ~/tmp/json)
+      status=$(jq -r ".items[$ni].status" ~/tmp/json)
       if [[  "$depid" == "$name" && "$wflid" == "$workflow" ]]; then
-        id=$(jq -r ".items[$ni].id" /tmp/json)
+        id=$(jq -r ".items[$ni].id" ~/tmp/json)
 #        curl -u admin:admin --header 'Tenant: default_tenant' \
 #          http://$k8s_master/api/v3.1/executions/$id | jq
         if [[ "$status" == "failed" ]]; then fail "execution failed"; fi
@@ -336,33 +336,33 @@ function start() {
     $k8s_user@$k8s_master:/home/$k8s_user/.kube/config $bp/kube.config
 
   log "package the blueprint"
-  # CLI: cfy blueprints package -o /tmp/$bp $bp
-  tar ckf /tmp/blueprint.tar $bp
+  # CLI: cfy blueprints package -o ~/tmp/$bp $bp
+  tar ckf ~/tmp/blueprint.tar $bp
 
   log "upload the blueprint"
-  # CLI: cfy blueprints upload -t default_tenant -b $bp /tmp/$bp.tar.gz
-  resp=$(curl -X PUT -s -w "%{http_code}" -o /tmp/json \
+  # CLI: cfy blueprints upload -t default_tenant -b $bp ~/tmp/$bp.tar.gz
+  resp=$(curl -X PUT -s -w "%{http_code}" -o ~/tmp/json \
     -u admin:admin --header 'Tenant: default_tenant' \
     --header "Content-Type: application/octet-stream" \
     http://$k8s_master/api/v3.1/blueprints/$bp?application_file_name=blueprint.yaml \
-    -T /tmp/blueprint.tar)
+    -T ~/tmp/blueprint.tar)
   if [[ "$resp" != "201" ]]; then
     log "Response: $resp"
-    cat /tmp/json
+    cat ~/tmp/json
     fail "upload failed, response $resp"
   fi
 
   log "create a deployment for the blueprint"
   # CLI: cfy deployments create -t default_tenant -b $bp $bp
   if [[ "z$inputs" != "z" ]]; then
-    resp=$(curl -X PUT -s -w "%{http_code}" -o /tmp/json \
+    resp=$(curl -X PUT -s -w "%{http_code}" -o ~/tmp/json \
       -u admin:admin --header 'Tenant: default_tenant' \
       -w "\nResponse: %{http_code}\n" \
       --header "Content-Type: application/json" \
       -d "{\"blueprint_id\": \"$bp\", \"inputs\": $inputs}" \
       http://$k8s_master/api/v3.1/deployments/$bp)
   else
-    resp=$(curl -X PUT -s -w "%{http_code}" -o /tmp/json \
+    resp=$(curl -X PUT -s -w "%{http_code}" -o ~/tmp/json \
       -u admin:admin --header 'Tenant: default_tenant' \
       -w "\nResponse: %{http_code}\n" \
       --header "Content-Type: application/json" \
@@ -373,7 +373,7 @@ function start() {
   resp=$(echo $resp | awk '/Response/ {print $2}')
   if [[ "$resp" != "201" ]]; then
     log "Response: $resp"
-    cat /tmp/json
+    cat ~/tmp/json
     fail "deployment failed, response $resp"
   fi
   sleep 10
@@ -382,7 +382,7 @@ function start() {
 
   log "install the deployment pod and service"
   # CLI: cfy executions start install -d $bp
-  resp=$(curl -X POST -s -w "%{http_code}" -o /tmp/json \
+  resp=$(curl -X POST -s -w "%{http_code}" -o ~/tmp/json \
     -u admin:admin --header 'Tenant: default_tenant' \
     -w "\nResponse: %{http_code}\n" \
     --header "Content-Type: application/json" \
@@ -392,7 +392,7 @@ function start() {
   resp=$(echo $resp | awk '/Response/ {print $2}')
   if [[ "$resp" != "201" ]]; then
     log "Response: $resp"
-    cat /tmp/json
+    cat ~/tmp/json
     fail "install failed, response $resp"
   fi
 
@@ -405,11 +405,11 @@ function start() {
 function cancel_executions() {
   log "workaround: cancelling all active executions prior to new execution"
   curl -s -u admin:admin --header 'Tenant: default_tenant' \
-    -o /tmp/json http://$k8s_master/api/v3.1/executions
+    -o ~/tmp/json http://$k8s_master/api/v3.1/executions
   i=0
-  exs=$(jq -r '.items[].status' /tmp/json)
+  exs=$(jq -r '.items[].status' ~/tmp/json)
   for status in $exs; do
-    id=$(jq -r ".items[$i].id" /tmp/json)
+    id=$(jq -r ".items[$i].id" ~/tmp/json)
     if [[ "$status" == "started" ]]; then
       log "force cancelling execution $id in state $status"
       id=$(curl -s -u admin:admin --header 'Tenant: default_tenant' \
@@ -445,11 +445,11 @@ function cancel_executions() {
 function check_resource() {
   log "checking for presence of resource: $1"
   status=""
-  if [[ -f /tmp/vfy ]]; then rm /tmp/vfy; fi
-  r=$(curl -s -o /tmp/vfy -u admin:admin --header 'Tenant: default_tenant' $1)
+  if [[ -f ~/tmp/vfy ]]; then rm ~/tmp/vfy; fi
+  r=$(curl -s -o ~/tmp/vfy -u admin:admin --header 'Tenant: default_tenant' $1)
   log "Response: $r"
-#  cat /tmp/vfy
-  status=$(cat /tmp/vfy | jq -r '.error_code')
+#  cat ~/tmp/vfy
+  status=$(cat ~/tmp/vfy | jq -r '.error_code')
 }
 
 function stop() {
@@ -466,7 +466,7 @@ function stop() {
   check_resource http://$k8s_master/api/v3.1/deployments/$bp
   if [[ "$status" != "not_found_error" ]]; then
     log "initiate uninstall action for $name deployment"
-    resp=$(curl -X POST -s -w "%{http_code}" -o /tmp/json \
+    resp=$(curl -X POST -s -w "%{http_code}" -o ~/tmp/json \
       -u admin:admin --header 'Tenant: default_tenant' \
       --header "Content-Type: application/json" \
       -d "{\"deployment_id\":\"$bp\", \"workflow_id\":\"uninstall\"}" \
@@ -474,10 +474,10 @@ function stop() {
     log "Response: $resp"
     if [[ "$resp" != "201" ]]; then
       log "uninstall action was not accepted"
-      cat /tmp/json
+      cat ~/tmp/json
     fi
 
-    id=$(jq -r ".id" /tmp/json)
+    id=$(jq -r ".id" ~/tmp/json)
     if [[ "$id" != "null" ]]; then
       log "wait for uninstall execution $id to be completed ('terminated')"
       status=""
@@ -486,13 +486,13 @@ function stop() {
         if [[ "$status" == "failed" ]]; then break; fi
         sleep 30
         curl -s -u admin:admin --header 'Tenant: default_tenant' \
-        -o /tmp/json http://$k8s_master/api/v3.1/executions/$id
-        status=$(jq -r ".status" /tmp/json)
+        -o ~/tmp/json http://$k8s_master/api/v3.1/executions/$id
+        status=$(jq -r ".status" ~/tmp/json)
         log "execution $id is $status"      
         ((tries--))
       done
       if [[ "$status" == "failed" || $tries == 0 ]]; then
-        cat /tmp/json
+        cat ~/tmp/json
         log "uninstall execution did not complete"
       else
         log "wait for node instances to be deleted"
@@ -501,15 +501,15 @@ function stop() {
         while [[ "$state" != "deleted" && $tries -gt 0 ]]; do
           sleep 10
           curl -s -u admin:admin --header 'Tenant: default_tenant' \
-            -o /tmp/json http://$k8s_master/api/v3.1/node-instances
-          ni=$(jq -r '.items | length' /tmp/json)
+            -o ~/tmp/json http://$k8s_master/api/v3.1/node-instances
+          ni=$(jq -r '.items | length' ~/tmp/json)
           state="deleted"
           while [[ $ni -ge 0 ]]; do
-            state=$(jq -r ".items[$ni].state" /tmp/json)
-            depid=$(jq -r ".items[$ni].deployment_id" /tmp/json)
+            state=$(jq -r ".items[$ni].state" ~/tmp/json)
+            depid=$(jq -r ".items[$ni].deployment_id" ~/tmp/json)
             if [[ "$depid" == "$name" && "$state" != "deleted" ]]; then 
               state=""
-              id=$(jq -r ".items[$ni].id" /tmp/json)
+              id=$(jq -r ".items[$ni].id" ~/tmp/json)
               log "waiting on deletion of node instance $id for $name"
             fi
             ((ni--))
@@ -517,7 +517,7 @@ function stop() {
           ((tries--))
         done
         if [[ "$state" != "deleted" ]]; then
-#          jq -r '.items' /tmp/json
+#          jq -r '.items' ~/tmp/json
           log "node-instances delete did not complete"
         fi
       fi
@@ -525,11 +525,11 @@ function stop() {
 #        http://$k8s_master/api/v3.1/executions/$id | jq
 
       log "delete the $name deployment"
-      resp=$(curl -X DELETE -s -w "%{http_code}" -o /tmp/json \
+      resp=$(curl -X DELETE -s -w "%{http_code}" -o ~/tmp/json \
         -u admin:admin --header 'Tenant: default_tenant' \
-        -o /tmp/json  http://$k8s_master/api/v3.1/deployments/$bp)
+        -o ~/tmp/json  http://$k8s_master/api/v3.1/deployments/$bp)
       log "Response: $resp"
-#      cat /tmp/json
+#      cat ~/tmp/json
       log "verify the $name deployment is deleted"
       check_resource http://$k8s_master/api/v3.1/deployments/$bp
       if [[ "$status" != "not_found_error" ]]; then
@@ -545,7 +545,7 @@ function stop() {
       fi
     else
       log "uninstall execution id = $id"
-      cat /tmp/json
+      cat ~/tmp/json
     fi
   else
     log "$name deployment not found"
@@ -555,9 +555,9 @@ function stop() {
   check_resource http://$k8s_master/api/v3.1/blueprints/$bp
   if [[ "$status" != "not_found_error" ]]; then
     log "delete the $bp blueprint"
-    resp=$(curl -X DELETE -s -w "%{http_code}" -o /tmp/json \
+    resp=$(curl -X DELETE -s -w "%{http_code}" -o ~/tmp/json \
       -u admin:admin --header 'Tenant: default_tenant' \
-      -o /tmp/json http://$k8s_master/api/v3.1/blueprints/$bp)
+      -o ~/tmp/json http://$k8s_master/api/v3.1/blueprints/$bp)
     log "Response: $resp"
 
     if [[ "$response" != "404" ]]; then
@@ -565,7 +565,7 @@ function stop() {
       log "verify the blueprint is deleted"
       check_resource http://$k8s_master/api/v3.1/blueprints/$bp
       if [[ "$status" != "not_found_error" ]]; then
-        cat /tmp/json
+        cat ~/tmp/json
         fail "blueprint delete failed"
       fi
     fi

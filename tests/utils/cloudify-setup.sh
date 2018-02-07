@@ -83,7 +83,7 @@ EOF
 export OS_REGION_NAME=$OS_REGION_NAME
 EOF
 fi
-source /tmp/cloudify/admin-openrc.sh
+source ~/tmp/cloudify/admin-openrc.sh
 }
 
 function get_external_net () {
@@ -102,10 +102,10 @@ function get_external_net () {
 
 function create_container () {
   # STEP 1: Create the container and launch it
-  echo "$0: Copy this script to /tmp/cloudify"
-  mkdir /tmp/cloudify
-  cp $0 /tmp/cloudify/.
-  chmod 755 /tmp/cloudify/*.sh
+  echo "$0: Copy this script to ~/tmp/cloudify"
+  mkdir ~/tmp/cloudify
+  cp $0 ~/tmp/cloudify/.
+  chmod 755 ~/tmp/cloudify/*.sh
 
   echo "$0: Setup admin-openrc.sh"
   setenv
@@ -115,7 +115,7 @@ function create_container () {
     sudo docker pull ubuntu:xenial
     sudo service docker start
 #   sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
-    sudo docker run -it -d -v /tmp/cloudify/:/tmp/cloudify --name cloudify ubuntu:xenial /bin/bash
+    sudo docker run -it -d -v ~/tmp/cloudify/:/tmp/cloudify --name cloudify ubuntu:xenial /bin/bash
     exit 0
   else 
     # Centos
@@ -133,7 +133,7 @@ EOF
     sudo docker pull ubuntu:xenial
     sudo service docker start
     #      sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
-    sudo docker run -i -t -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash
+    sudo docker run -i -t -d -v ~/tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash
   fi
 }
 
@@ -177,7 +177,7 @@ function setup () {
   cfy init
 
   echo "$0: Setup admin-openrc.sh"
-  source /tmp/cloudify/admin-openrc.sh
+  source ~/tmp/cloudify/admin-openrc.sh
 
   get_external_net
 
@@ -257,19 +257,19 @@ function setup () {
 		
     echo "$0: Install Cloudify OpenStack Plugin"
   #  pip install https://github.com/cloudify-cosmo/cloudify-openstack-plugin/archive/1.4.zip
-    cd /tmp/cloudify
+    cd ~/tmp/cloudify
     if [ -d "cloudify-openstack-plugin" ]; then rm -rf cloudify-openstack-plugin; fi  
     git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git
     git checkout 1.4
     echo "$0: Patch plugin.yaml to reference management network"
-    sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'vnf_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml  		
+    sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'vnf_mgmt'/" ~/tmp/cloudify/cloudify-openstack-plugin/plugin.yaml  		
     cd cloudify-openstack-plugin
     python setup.py build
     # Use "pip install ." as "python setup.py install" does not install dependencies - resulted in an error as cloudify-openstack-plugin requires novaclient 2.26, the setup.py command installed novaclient 2.29
     pip install .
 
     echo "$0: Install Cloudify Fabric (SSH) Plugin"
-    cd /tmp/cloudify
+    cd ~/tmp/cloudify
     if [ -d "cloudify-fabric-plugin" ]; then rm -rf cloudify-fabric-plugin; fi  
     git clone https://github.com/cloudify-cosmo/cloudify-fabric-plugin.git
     cd cloudify-fabric-plugin
@@ -282,7 +282,7 @@ function setup () {
 
 clean () {
   if [ "$1" == "cloudify-cli" ]; then
-    source /tmp/cloudify/admin-openrc.sh
+    source ~/tmp/cloudify/admin-openrc.sh
     if [[ -z "$(openstack user list|grep tacker)" ]]; then 
       neutron router-gateway-clear vnf_mgmt_router
       pid=($(neutron router-port-list vnf_mgmt_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_mgmt_router vnf_mgmt;  done

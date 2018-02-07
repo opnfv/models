@@ -132,8 +132,8 @@ while [[ "$status" != "Running" ]]; do
   sleep 10
   status=$(kubectl get pods -o json --namespace default $hpod | jq -r '.status.phase')
 done
-kubectl cp $hpod:/usr/share/clearwater/bin/clearwater-socket-factory-sig-wrapper /tmp/clearwater-socket-factory-sig-wrapper -c homestead
-kubectl cp $hpod:/usr/share/clearwater/bin/clearwater-socket-factory-mgmt-wrapper /tmp/clearwater-socket-factory-mgmt-wrapper -c homestead
+kubectl cp $hpod:/usr/share/clearwater/bin/clearwater-socket-factory-sig-wrapper ~/tmp/clearwater-socket-factory-sig-wrapper -c homestead
+kubectl cp $hpod:/usr/share/clearwater/bin/clearwater-socket-factory-mgmt-wrapper ~/tmp/clearwater-socket-factory-mgmt-wrapper -c homestead
 kubectl delete deployment --namespace default homestead-prov
 kubectl delete service --namespace default homestead-prov
 cd clearwater-docker/kubernetes
@@ -153,8 +153,8 @@ while [[ "$status" != "Running" ]]; do
   status=$(kubectl get pods -o json --namespace default $hppod | jq -r '.status.phase')
 done
 
-kubectl cp /tmp/clearwater-socket-factory-sig-wrapper $hppod:/usr/share/clearwater/bin/clearwater-socket-factory-sig-wrapper  -c homestead-prov
-kubectl cp /tmp/clearwater-socket-factory-mgmt-wrapper $hppod://usr/share/clearwater/bin/clearwater-socket-factory-mgmt-wrapper -c homestead-prov
+kubectl cp ~/tmp/clearwater-socket-factory-sig-wrapper $hppod:/usr/share/clearwater/bin/clearwater-socket-factory-sig-wrapper  -c homestead-prov
+kubectl cp ~/tmp/clearwater-socket-factory-mgmt-wrapper $hppod://usr/share/clearwater/bin/clearwater-socket-factory-mgmt-wrapper -c homestead-prov
 EOF
 }
 

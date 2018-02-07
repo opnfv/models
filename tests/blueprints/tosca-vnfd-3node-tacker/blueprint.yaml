@@ -31,8 +31,8 @@ topology_template:
           <pubkey>
           EOM
           sudo mount /dev/sr0 /mnt/
-          mkdir /tmp/www
-          cd /tmp/www
+          mkdir ~/tmp/www
+          cd ~/tmp/www
           mkdir html
           cat >Dockerfile <<EOM
           FROM nginx
@@ -62,7 +62,7 @@ topology_template:
           </div>
           </body></html>
           EOM
-          wget -O /tmp/www/html/favicon.ico https://git.opnfv.org/models/plain/tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico
+          wget -O ~/tmp/www/html/favicon.ico https://git.opnfv.org/models/plain/tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico
           sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
           curl -fsSL https://apt.dockerproject.org/gpg | sudo apt-key add -
           sudo apt-key update
@@ -123,8 +123,8 @@ topology_template:
           <pubkey>
           EOM
           sudo mount /dev/sr0 /mnt/
-          mkdir /tmp/www
-          cd /tmp/www
+          mkdir ~/tmp/www
+          cd ~/tmp/www
           mkdir html
           cat >Dockerfile <<EOM
           FROM nginx
@@ -154,7 +154,7 @@ topology_template:
           </div>
           </body></html>
           EOM
-          wget -O /tmp/www/html/favicon.ico https://git.opnfv.org/models/plain/tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico
+          wget -O ~/tmp/www/html/favicon.ico https://git.opnfv.org/models/plain/tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico
           sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
           curl -fsSL https://apt.dockerproject.org/gpg | sudo apt-key add -
           sudo apt-key update
@@ -224,7 +224,7 @@ topology_template:
           -j DNAT --to-destination <vdu2_ip>:80
           sudo iptables -t nat -A POSTROUTING -j MASQUERADE
           EOF
-          bash /tmp/setup.sh
+          bash ~/tmp/setup.sh
         config: |
           param0: key1
           param1: key2
