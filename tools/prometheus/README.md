@@ -1,3 +1,9 @@
+<!---
+.. This work is licensed under a Creative Commons Attribution 4.0 International License.
+.. http://creativecommons.org/licenses/by/4.0
+.. (c) 2017-2018 AT&T Intellectual Property, Inc
+-->
+
 This folder contains scripts etc to setup [prometheus](https://github.com/prometheus/prometheus) on a server cluster. It installs:
 * a prometheus server (on the host OS) and [grafana](https://grafana.com/) (in docker)
 * prometheus exporters on a set of other nodes, to be monitored

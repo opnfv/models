@@ -1,0 +1,73 @@
+# When adding projects all `arrays: []` sections must have
+# a value, Use 'nullvalue' if no waivers are available.
+#
+# This file uses standard regular expression syntax,  however be mindful
+# of escaping YAML delimiters too (such as `:`) using double quotes "".
+
+binaries:
+  docs/images/models-k8s.png:
+    - e57b24c5591f20a8892a159fb3e83dbfd987ec0dac637c602b71a14e62da7097
+  tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico:
+    - 2088cf0e9512f999b35b76b89ceec1c0e19b7b4d4444a06485c505cc734ac229
+  tests/blueprints/tosca-vnfd-3node-tacker/logo.png:
+    - 2d6e161ccbcf1bd45faab7a148095977fee40547cac479cae44bb5fddc18eb74
+  docs/images/models-k8s.png:
+    - fe2af6fdafb5078f82a3d81b0f446f25cdd3e9795c92d1e848fc551e6e8248de
+  tests/blueprints/tosca-vnfd-3node-tacker/logo.png:
+    - af757aa0af55c321cfe1231737eefb069450eb23c6cb89d4d87134e3dbc26c92
+  tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico:
+    - f38f1389d374b06d54f1dd410a9e09654848d35858014f1cb86475369dc16c56
+
+
+file_audits:
+  file_names:
+    - README.md
+  file_contents:
+    - "(.*)yum install.*wget"
+    - "(.*)yum install.*git"
+    - "(.*)apt-get install.*wget"
+    - "(.*)apt-get install.*git"
+    - "\\bcurl\\b"
+    - "wget"
+    - "git.*clone(.*)gerrit\\.opnfv\\.org"
+    - "git.*clone(.*)\\.openstack\\.org"
+    - "git.*clone(.*)github\\.com/openstack"
+    - "git.*clone(.*)github\\.com/cloudify-cosmo/cloudify-openstack-plugin"
+    - "git.*clone(.*)github\\.com/cloudify-cosmo/cloudify-fabric-plugin"
+    - "git.*clone(.*)github\\.com/cloudify-cosmo/cloudify-hello-world-example"
+    - "wget (.*)github\\.com/cloudify-cosmo/cloudify-manager-blueprints"
+    - "wget (.*)github\\.com/cloudify-incubator/cloudify-kubernetes-plugin"
+    - "wget (.*)gigaspaces-repository-eu\\.s3\\.amazonaws\\.com/org/cloudify3"
+    - "wget (.*)repository\\.cloudifysource\\.org"
+    - "wget (.*)releases\\.rancher\\.com"
+    - "wget (.*)packages\\.docker\\.com"
+    - "curl (.*)raw\\.githubusercontent\\.com/kubernetes/helm/master/scripts/get"
+    - "git.*clone(.*)github\\.com/blsaws/cloudify-cli-hello-world-example"
+    - "git.*clone(.*)github\\.com/Metaswitch/clearwater-docker"
+    - "git.*clone(.*)github\\.com/Metaswitch/clearwater-live-test"
+    - "git.*clone(.*)github\\.com/kubernetes"
+    - "git.*clone(.*)github\\.com/att/netarbiter"
+    - ".*\\$OS_PASSWORD.*"
+    - ".*\\~/tmp/.*"
+    - ".*SIGNUP_CODE\\=secret.*"
+    - "ssh_key_filename: /root/.ssh/vHello.pem"
+    - "vnf_mgmt 10.0.0.0/24"
+    - "# and setup CLI environment.*"
+    - "eval `ssh-agent`"
+    - ".*Create secrets for kubernetes.*"
+    - "cfy secrets.*"
+    - ".*get_secret: kubernetes.*"
+    - "0\\.0\\.0\\.0:4243"
+    - ".*kubectl create secret.*"
+    - ".*kubectl get secrets.*"
+    - ".*kubectl delete secrets.*"
+    - ".*Create Ceph admin secret.*"
+    - ".*SecretName: ceph.*"
+    - ".*Create ceph-secret.*"
+    - ".*# A similar secret.*"
+    - '.*"user":"", "password":"" }.*'
+    - ".*--password=\\$MYSQL_PASSWORD.*"
+    - ".*#bind_host = 0\\.0\\.0\\.0\\.*"
+    - ".*password = tacker.*"
+    - ".*# < transport_url = rabbit://stackrabbit:secretrabbit.*"
+    - ".*# password = secretservice.*"

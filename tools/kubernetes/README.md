@@ -1,3 +1,9 @@
+<!---
+.. This work is licensed under a Creative Commons Attribution 4.0 International License.
+.. http://creativecommons.org/licenses/by/4.0
+.. (c) 2017-2018 AT&T Intellectual Property, Inc
+-->
+
 This folder contains scripts etc to setup a kubernetes cluster with the following type of environment and components:
 * hardware
   * 2 or more bare metal servers: may also work with VMs
