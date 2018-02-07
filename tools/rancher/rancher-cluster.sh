@@ -117,10 +117,10 @@ function install_cli_tools() {
   export RANCHER_URL=http://$1:8080/v1
   id=$(wget -qO- http://$1:8080/v2-beta/projects/ | jq -r '.data[0].id')
   export RANCHER_ENVIRONMENT=$id
-  curl -s -o /tmp/keys -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"accountId":"reference[account]", "description":"string", "name":"string", "publicValue":"string", "secretValue":"password"}' http://$1:8080/v2-beta/projects/$id/apikeys
-#  curl -s -o /tmp/keys -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d {"type":"apikey","accountId":"1a1","name":"admin","description":null,"created":null,"kind":null,"removed":null,"uuid":null} http://$1:8080/v2-beta/projects/$id/apikey
-  export RANCHER_ACCESS_KEY=$(jq -r '.publicValue' /tmp/keys)
-  export RANCHER_SECRET_KEY=$(jq -r '.secretValue' /tmp/keys)
+  curl -s -o ~/tmp/keys -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"accountId":"reference[account]", "description":"string", "name":"string", "publicValue":"string", "secretValue":"password"}' http://$1:8080/v2-beta/projects/$id/apikeys
+#  curl -s -o ~/tmp/keys -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d {"type":"apikey","accountId":"1a1","name":"admin","description":null,"created":null,"kind":null,"removed":null,"uuid":null} http://$1:8080/v2-beta/projects/$id/apikey
+  export RANCHER_ACCESS_KEY=$(jq -r '.publicValue' ~/tmp/keys)
+  export RANCHER_SECRET_KEY=$(jq -r '.secretValue' ~/tmp/keys)
   # create the env file ~/.rancher/cli.json
   rancher config <<EOF
 $RANCHER_URL
@@ -132,12 +132,12 @@ EOF
   log "Create registration token"
   # added sleep to allow server time to be ready to create registration tokens (otherwise error is returned)
   sleep 5
-  curl -s -o /tmp/token -X POST -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"name":"master"}' http://$master/v1/registrationtokens
-  while [[ $(jq -r ".type" /tmp/token) != "registrationToken" ]]; do
+  curl -s -o ~/tmp/token -X POST -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"name":"master"}' http://$master/v1/registrationtokens
+  while [[ $(jq -r ".type" ~/tmp/token) != "registrationToken" ]]; do
     sleep 5
-    curl -s -o /tmp/token -X POST -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"name":"master"}' http://$master/v1/registrationtokens
+    curl -s -o ~/tmp/token -X POST -u "${RANCHER_ACCESS_KEY}:${RANCHER_SECRET_KEY}" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"name":"master"}' http://$master/v1/registrationtokens
   done
-  id=$(jq -r ".id" /tmp/token)
+  id=$(jq -r ".id" ~/tmp/token)
   log "registration token id=$id"
 
   log "wait until registration command is created"
