@@ -78,7 +78,7 @@ function setup_prometheus() {
     log "$job at $eip"
   done
   log "Prometheus dashboard is available at http://$host_ip:30990"
-  echo "Prometheus dashboard is available at http://$host_ip:30990" >>/tmp/summary
+  echo "Prometheus dashboard is available at http://$host_ip:30990" >>~/tmp/summary
 }
 
 function setup_grafana() {
@@ -129,9 +129,9 @@ EOF
     curl -X POST -u admin:admin -H "Accept: application/json" -H "Content-type: application/json" -d @${board} http://$grafana_ip:30330/api/dashboards/db
   done
   log "Grafana dashboards are available at http://$host_ip:30330 (login as admin/admin)"
-  echo "Grafana dashboards are available at http://$host_ip:30330 (login as admin/admin)" >>/tmp/summary
+  echo "Grafana dashboards are available at http://$host_ip:30330 (login as admin/admin)" >>~/tmp/summary
   log "Grafana API is available at http://admin:admin@$host_ip:30330/api/v1/query?query=<string>"
-  echo "Grafana API is available at http://admin:admin@$host_ip:30330/api/v1/query?query=<string>" >>/tmp/summary
+  echo "Grafana API is available at http://admin:admin@$host_ip:30330/api/v1/query?query=<string>" >>~/tmp/summary
   log "connect_grafana complete"
 }
 
