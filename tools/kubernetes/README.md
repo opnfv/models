@@ -52,7 +52,7 @@ Here is an overview of the deployment process, which if desired can be completed
 
 See comments in [setup script](k8s-cluster.sh) and the other scripts for more info.
 
-See [readme in the folder above](/tools/readme.md) for an illustration of the resulting k8s cluster in a hybrid cloud environment.
+See [readme in the folder above](/tools/README.md) for an illustration of the resulting k8s cluster in a hybrid cloud environment.
 
 The flow for this demo deployment is illustrated below.
 
