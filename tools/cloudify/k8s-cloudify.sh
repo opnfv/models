@@ -150,7 +150,7 @@ function setup () {
   if [[ "$USER" == "centos" ]]; then
     # copy image to folder that qemu has access to, to avoid: ERROR    Cannot access storage file '/home/centos/cloudify/cloudify-manager-community-17.9.21.qcow2' (as uid:107, gid:107): Permission denied
     cp cloudify-manager-community-17.9.21.qcow2 ~/tmp/.
-    img="/tmp/cloudify-manager-community-17.9.21.qcow2"
+    img="~/tmp/cloudify-manager-community-17.9.21.qcow2"
   else
     img="cloudify-manager-community-17.9.21.qcow2"
   fi
