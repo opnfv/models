@@ -12,7 +12,7 @@ binaries:
   tests/blueprints/tosca-vnfd-3node-tacker/logo.png:
     - 2d6e161ccbcf1bd45faab7a148095977fee40547cac479cae44bb5fddc18eb74
   docs/images/models-k8s.png:
-    - fe2af6fdafb5078f82a3d81b0f446f25cdd3e9795c92d1e848fc551e6e8248de
+    - a0cbf57654f18f4365e3934f2669eb8f23227b20d69a4b62aa274b1e530d4272
   tests/blueprints/tosca-vnfd-3node-tacker/logo.png:
     - af757aa0af55c321cfe1231737eefb069450eb23c6cb89d4d87134e3dbc26c92
   tests/blueprints/tosca-vnfd-3node-tacker/favicon.ico:
