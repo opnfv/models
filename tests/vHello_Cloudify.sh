@@ -77,18 +77,18 @@ select_manager() {
 }
 
 setup() {
-  echo "$0: Setup temp test folder /tmp/cloudify and copy this script there"
-  mkdir /tmp/cloudify
-  chmod 777 /tmp/cloudify/
-  cp $0 /tmp/cloudify/.
-  chmod 755 /tmp/cloudify/*.sh
+  echo "$0: Setup temp test folder ~/tmp/cloudify and copy this script there"
+  mkdir -p ~/tmp/cloudify
+  chmod 777 ~/tmp/cloudify/
+  cp $0 ~/tmp/cloudify/.
+  chmod 755 ~/tmp/cloudify/*.sh
 
   echo "$0: cloudify-setup part 1"
   bash utils/cloudify-setup.sh $1 init
 
   echo "$0: cloudify-setup part 2"
   CONTAINER=$(sudo docker ps -l | awk "/cloudify/ { print \$1 }")
-  sudo docker exec $CONTAINER /bin/bash /tmp/cloudify/cloudify-setup.sh $1 setup
+  sudo docker exec $CONTAINER /bin/bash cloudify-setup.sh $1 setup
   if [ $? -eq 1 ]; then fail; fi
   pass
 }
@@ -98,9 +98,9 @@ start() {
   source ~/cloudify/venv/bin/activate
 
   echo "$0: reset blueprints folder"
-  if [[ -d /tmp/cloudify/blueprints ]]; then rm -rf /tmp/cloudify/blueprints; fi
-  mkdir -p /tmp/cloudify/blueprints
-  cd /tmp/cloudify/blueprints
+  if [[ -d ~/blueprints ]]; then rm -rf ~/blueprints; fi
+  mkdir ~/blueprints
+  cd ~/blueprints
 
   echo "$0: clone cloudify-hello-world-example"
   if [[ "$1" == "cloudify-manager" ]]; then 
@@ -112,10 +112,10 @@ start() {
     cd cloudify-cli-hello-world-example
   fi
 
-  cd /tmp/cloudify/blueprints
+  cd ~/blueprints
 
   echo "$0: setup OpenStack CLI environment"
-  source /tmp/cloudify/admin-openrc.sh
+  source ~/admin-openrc.sh
 
   echo "$0: Setup trusty-server glance image if needed"
   if [[ -z $(openstack image list | awk "/ trusty-server / { print \$2 }") ]]; then glance --os-image-api-version 1 image-create --name trusty-server --disk-format qcow2 --location https://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img --container-format bare; fi 
@@ -124,7 +124,7 @@ start() {
   if [[ "$1" == "cloudify-manager" ]]; then 
     echo "$0: create Cloudify Manager blueprint inputs file"
     # Set host image per Cloudify agent compatibility: http://docs.getcloudify.org/3.4.0/agents/overview/
-    cd /tmp/cloudify/blueprints
+    cd ~/blueprints
     cat <<EOF >vHello-inputs.yaml
 image: trusty-server
 flavor: m1.small
@@ -156,7 +156,7 @@ EOF
   fi
 
   echo "$0: initialize cloudify environment"
-  cd /tmp/cloudify/blueprints
+  cd ~/blueprints
   cfy init -r
 
   if [[ "$1" == "cloudify-manager" ]]; then 
@@ -198,10 +198,10 @@ stop() {
   source ~/cloudify/venv/bin/activate
 
   echo "$0: setup OpenStack CLI environment"
-  source /tmp/cloudify/admin-openrc.sh
+  source ~/admin-openrc.sh
 
   echo "$0: initialize cloudify environment"
-  cd /tmp/cloudify/blueprints
+  cd ~/blueprints
 
   if [[ "$1" == "cloudify-manager" ]]; then 
     select_manager
@@ -223,7 +223,7 @@ stop() {
 forward_to_container () {
   echo "$0: pass $2 command to vHello.sh in cloudify container"
   CONTAINER=$(sudo docker ps -a | awk "/cloudify/ { print \$1 }")
-  sudo docker exec $CONTAINER /bin/bash /tmp/cloudify/vHello_Cloudify.sh $1 $2 $2
+  sudo docker exec $CONTAINER /bin/bash vHello_Cloudify.sh $1 $2 $2
   if [ $? -eq 1 ]; then fail; fi
 }
 
