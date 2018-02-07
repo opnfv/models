@@ -133,7 +133,7 @@ EOF
   kubectl create secret generic ceph-secret-admin --from-literal=key="$admin_key" --namespace=kube-system --type=kubernetes.io/rbd
 
   log "Create rdb storageClass 'general'"
-  cat <<EOF >/tmp/ceph-sc.yaml
+  cat <<EOF >~/tmp/ceph-sc.yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
@@ -150,7 +150,7 @@ parameters:
 EOF
   # TODO: find out where in the above ~/.kube folders became owned by root
   sudo chown -R ubuntu:ubuntu ~/.kube/*
-  kubectl create -f /tmp/ceph-sc.yaml
+  kubectl create -f ~/tmp/ceph-sc.yaml
 
   log "Create storage pool 'kube'"
   # https://github.com/kubernetes/examples/blob/master/staging/persistent-volume-provisioning/README.md method
@@ -167,7 +167,7 @@ EOF
   # Per https://github.com/kubernetes/examples/blob/master/staging/persistent-volume-provisioning/README.md
 
   log "Create andtest a persistentVolumeClaim"
-  cat <<EOF >/tmp/ceph-pvc.yaml
+  cat <<EOF >~/tmp/ceph-pvc.yaml
 {
   "kind": "PersistentVolumeClaim",
   "apiVersion": "v1",
@@ -189,7 +189,7 @@ EOF
   }
 }
 EOF
-  kubectl create -f /tmp/ceph-pvc.yaml
+  kubectl create -f ~/tmp/ceph-pvc.yaml
   while [[ "x$(kubectl get pvc -o jsonpath='{.status.phase}' claim1)" != "xBound" ]]; do
     log "Waiting for pvc claim1 to be 'Bound'"
     kubectl describe pvc
