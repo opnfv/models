@@ -43,7 +43,7 @@ if [ "$dist" == "Ubuntu" ]; then
   echo "$0: Ubuntu-based install"
   echo "$0: Create the environment file"
   KEYSTONE_HOST=$(juju status --format=short | awk "/keystone\/0/ { print \$3 }")
-  cat <<EOF >/tmp/cloudify/admin-openrc.sh
+  cat <<EOF >~/tmp/cloudify/admin-openrc.sh
 export CONGRESS_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
 export HORIZON_HOST=$(juju status --format=short | awk "/openstack-dashboard/ { print \$3 }")
 export KEYSTONE_HOST=$KEYSTONE_HOST
@@ -66,7 +66,7 @@ else
   echo "$0: Get address of Controller node"
   export CONTROLLER_HOST1=$(openstack server list | awk "/overcloud-controller-0/ { print \$8 }" | sed 's/ctlplane=//g')
   echo "$0: Create the environment file"
-  cat <<EOF >/tmp/cloudify/admin-openrc.sh
+  cat <<EOF >~/tmp/cloudify/admin-openrc.sh
 export CONGRESS_HOST=$CONTROLLER_HOST1
 export KEYSTONE_HOST=$CONTROLLER_HOST1
 export CEILOMETER_HOST=$CONTROLLER_HOST1
@@ -75,15 +75,15 @@ export GLANCE_HOST=$CONTROLLER_HOST1
 export NEUTRON_HOST=$CONTROLLER_HOST1
 export NOVA_HOST=$CONTROLLER_HOST1
 EOF
-  cat ~/overcloudrc >>/tmp/cloudify/admin-openrc.sh
+  cat ~/overcloudrc >>~/tmp/cloudify/admin-openrc.sh
   source ~/overcloudrc
   export OS_REGION_NAME=$(openstack endpoint list | awk "/ nova / { print \$4 }")
   # sed command below is a workaound for a bug - region shows up twice for some reason
-  cat <<EOF | sed '$d' >>/tmp/cloudify/admin-openrc.sh
+  cat <<EOF | sed '$d' >>~/tmp/cloudify/admin-openrc.sh
 export OS_REGION_NAME=$OS_REGION_NAME
 EOF
 fi
-source /tmp/cloudify/admin-openrc.sh
+source ~/tmp/cloudify/admin-openrc.sh
 }
 
 function get_external_net () {
@@ -91,7 +91,7 @@ function get_external_net () {
   for id in ${network_ids[@]}; do
       [[ $(neutron net-show ${id}|grep 'router:external'|grep -i "true") != "" ]] && ext_net_id=${id}
   done
-  if [[ $ext_net_id ]]; then 
+  if [[ $ext_net_id ]]; then
     EXTERNAL_NETWORK_NAME=$(openstack network show $ext_net_id | awk "/ name / { print \$4 }")
     EXTERNAL_SUBNET_ID=$(openstack network show $EXTERNAL_NETWORK_NAME | awk "/ subnets / { print \$4 }")
   else
@@ -102,10 +102,10 @@ function get_external_net () {
 
 function create_container () {
   # STEP 1: Create the container and launch it
-  echo "$0: Copy this script to /tmp/cloudify"
-  mkdir /tmp/cloudify
-  cp $0 /tmp/cloudify/.
-  chmod 755 /tmp/cloudify/*.sh
+  echo "$0: Copy this script to ~/tmp/cloudify"
+  mkdir ~/tmp/cloudify
+  cp $0 ~/tmp/cloudify/.
+  chmod 755 ~/tmp/cloudify/*.sh
 
   echo "$0: Setup admin-openrc.sh"
   setenv
@@ -115,7 +115,7 @@ function create_container () {
     sudo docker pull ubuntu:xenial
     sudo service docker start
 #   sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
-    sudo docker run -it -d -v /tmp/cloudify/:/tmp/cloudify --name cloudify ubuntu:xenial /bin/bash
+    sudo docker run -it -d -v ~/tmp/cloudify/:/home/ubuntu/cloudify --name cloudify ubuntu:xenial /bin/bash
     exit 0
   else 
     # Centos
@@ -126,14 +126,14 @@ name=Docker Repository
 baseurl=https://yum.dockerproject.org/repo/main/centos/7/
 enabled=1
 gpgcheck=1
-gpgkey=https://yum.dockerproject.org/gpg 
+gpgkey=https://yum.dockerproject.org/gpg
 EOF
     sudo yum install -y docker-engine
     # xenial is needed for python 3.5
     sudo docker pull ubuntu:xenial
     sudo service docker start
     #      sudo docker run -it  -v ~/git/joid/ci/cloud/admin-openrc.sh:/root/admin-openrc.sh -v ~/cloudify/cloudify-setup.sh:/root/cloudify-setup.sh ubuntu:xenial /bin/bash
-    sudo docker run -i -t -d -v /tmp/cloudify/:/tmp/cloudify ubuntu:xenial /bin/bash
+    sudo docker run -i -t -d -v ~/tmp/cloudify/:/home/ubuntu/cloudify ubuntu:xenial /bin/bash
   fi
 }
 
@@ -147,7 +147,7 @@ function setup () {
     apt-get install -y wget
     apt-get install -y openssh-server
     apt-get install -y git
-  #  apt-get install -y apg git gcc python-dev libxml2 libxslt1-dev libzip-dev 
+  #  apt-get install -y apg git gcc python-dev libxml2 libxslt1-dev libzip-dev
   #  pip install --upgrade pip virtualenv setuptools pbr tox
   fi
 
@@ -161,8 +161,8 @@ function setup () {
   pip install --upgrade python-neutronclient
 
   echo "$0: cleanup any previous install attempt"
-  if [ -d "~/cloudify" ]; then rm -rf ~/cloudify; fi  
-  if [ -d "~/cloudify-manager" ]; then rm -rf ~/cloudify-manager; fi  
+  if [ -d "~/cloudify" ]; then rm -rf ~/cloudify; fi
+  if [ -d "~/cloudify-manager" ]; then rm -rf ~/cloudify-manager; fi
   rm ~/get-cloudify.py
 
   echo "$0: Create virtualenv"
@@ -177,7 +177,7 @@ function setup () {
   cfy init
 
   echo "$0: Setup admin-openrc.sh"
-  source /tmp/cloudify/admin-openrc.sh
+  source ~/tmp/cloudify/admin-openrc.sh
 
   get_external_net
 
@@ -215,7 +215,7 @@ function setup () {
     echo "$0: Setup image_id"
     # CentOS-7-x86_64-GenericCloud.qcow2 failed to be routable (?), so changed to 1607 version
     image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
-    if [ -z $image ]; then 
+    if [ -z $image ]; then
       glance --os-image-api-version 1 image-create --name CentOS-7-x86_64-GenericCloud-1607 --disk-format qcow2 --location http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1607.qcow2 --container-format bare
     fi
     image=$(openstack image list | awk "/ CentOS-7-x86_64-GenericCloud-1607 / { print \$2 }")
@@ -239,8 +239,8 @@ function setup () {
     # See https://cloudifysource.atlassian.net/browse/CFY-5050
     cfy ssh -c "sudo yum install -y gcc gcc-c++ python-devel"
 
-    # Note setup_test_environment is not needed since the Manager sets up the 
-    # needed networks etc 
+    # Note setup_test_environment is not needed since the Manager sets up the
+    # needed networks etc
   else
     echo "$0: Prepare the Cloudify CLI prerequisites and data"
 
@@ -248,29 +248,29 @@ function setup () {
     if [ $(neutron net-list | awk "/ vnf_mgmt / { print \$2 }") ]; then
       echo "$0: vnf_mgmt network exists"
     else
-      neutron net-create vnf_mgmt		
+      neutron net-create vnf_mgmt
       echo "$0: Create management subnet"
       neutron subnet-create vnf_mgmt 10.0.0.0/24 --name vnf_mgmt --gateway 10.0.0.1 --enable-dhcp --allocation-pool start=10.0.0.2,end=10.0.0.254 --dns-nameserver 8.8.8.8
     fi
 
     setup_test_environment
-		
+
     echo "$0: Install Cloudify OpenStack Plugin"
   #  pip install https://github.com/cloudify-cosmo/cloudify-openstack-plugin/archive/1.4.zip
-    cd /tmp/cloudify
-    if [ -d "cloudify-openstack-plugin" ]; then rm -rf cloudify-openstack-plugin; fi  
+    cd ~/tmp/cloudify
+    if [ -d "cloudify-openstack-plugin" ]; then rm -rf cloudify-openstack-plugin; fi
     git clone https://github.com/cloudify-cosmo/cloudify-openstack-plugin.git
     git checkout 1.4
     echo "$0: Patch plugin.yaml to reference management network"
-    sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'vnf_mgmt'/" /tmp/cloudify/cloudify-openstack-plugin/plugin.yaml  		
+    sed -i -- ":a;N;\$!ba;s/management_network_name:\n        default: ''/management_network_name:\n        default: 'vnf_mgmt'/" ~/tmp/cloudify/cloudify-openstack-plugin/plugin.yaml  		
     cd cloudify-openstack-plugin
     python setup.py build
     # Use "pip install ." as "python setup.py install" does not install dependencies - resulted in an error as cloudify-openstack-plugin requires novaclient 2.26, the setup.py command installed novaclient 2.29
     pip install .
 
     echo "$0: Install Cloudify Fabric (SSH) Plugin"
-    cd /tmp/cloudify
-    if [ -d "cloudify-fabric-plugin" ]; then rm -rf cloudify-fabric-plugin; fi  
+    cd ~/tmp/cloudify
+    if [ -d "cloudify-fabric-plugin" ]; then rm -rf cloudify-fabric-plugin; fi
     git clone https://github.com/cloudify-cosmo/cloudify-fabric-plugin.git
     cd cloudify-fabric-plugin
     git checkout 1.4
@@ -282,8 +282,8 @@ function setup () {
 
 clean () {
   if [ "$1" == "cloudify-cli" ]; then
-    source /tmp/cloudify/admin-openrc.sh
-    if [[ -z "$(openstack user list|grep tacker)" ]]; then 
+    source ~/tmp/cloudify/admin-openrc.sh
+    if [[ -z "$(openstack user list|grep tacker)" ]]; then
       neutron router-gateway-clear vnf_mgmt_router
       pid=($(neutron router-port-list vnf_mgmt_router|grep -v name|awk '{print $2}')); for id in ${pid[@]}; do neutron router-interface-delete vnf_mgmt_router vnf_mgmt;  done
       neutron router-delete vnf_mgmt_router
@@ -338,4 +338,3 @@ case "$2" in
     echo "clean: Clean"
     exit 1
 esac
-
