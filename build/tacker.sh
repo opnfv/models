@@ -46,13 +46,13 @@ else
   sudo yum update -y
 fi
 
-if [[ ! -d /tmp/models ]]; then
-  echo; echo "$0 $(date): Cloning models repo to /tmp/models"
-  git clone https://gerrit.opnfv.org/gerrit/models /tmp/models
+if [[ ! -d ~/tmp/models ]]; then
+  echo; echo "$0 $(date): Cloning models repo to ~/tmp/models"
+  git clone https://gerrit.opnfv.org/gerrit/models ~/tmp/models
 fi
 
 echo; echo "$0 $(date): Starting Tacker build process"
-cd /tmp/models/build/tacker
+cd ~/tmp/models/build/tacker
 sed -i -- "s/<branch>/$branch/g" Dockerfile
 sudo docker build -t tacker .
 
