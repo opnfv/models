@@ -171,7 +171,7 @@ EOG
     log "Run ceph-osd at $node"
     name=$(ssh -x -o StrictHostKeyChecking=no $USER@$node hostname)
     # TODO: try sudo due to error
-    # command_check_call: Running command: /usr/bin/ceph-osd --cluster ceph --mkfs -i 0 --monmap /var/lib/ceph/tmp/mnt.JKiQbp/activate.monmap --osd-data /var/lib/ceph/tmp/mnt.JKiQbp --osd-uuid 23e72c93-e5b3-48ad-b919-ef59fe92b189 --setuser ceph --setgroup disk ... -1 bluestore(/var/lib/ceph/tmp/mnt.JKiQbp) _setup_block_symlink_or_file failed to open block file: (13) Permission denied
+    # command_check_call: Running command: /usr/bin/ceph-osd --cluster ceph --mkfs -i 0 ...
     # TODO: leave out sudo... resulted in "./helm-install-ceph-osd.sh: line 40: helm: command not found"
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
       $USER@$node sudo chmod 777 /var/lib/ceph/tmp
