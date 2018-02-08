@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2017 AT&T Intellectual Property, Inc
+# Copyright 2017-2018 AT&T Intellectual Property, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -106,7 +106,11 @@ EOF
 source ~/k8s_env_$k8s_master_hostname.sh
 env | grep k8s_
 
+echo; echo "$0 $(date): Deploying base OS for master and worker nodes..."
+start=$((`date +%s`/60))
 source ~/models/tools/maas/deploy.sh $k8s_user $k8s_key "$k8s_nodes" $extras
+step_end "source ~/models/tools/maas/deploy.sh $k8s_user $k8s_key \"$k8s_nodes\" $extras"
+
 eval `ssh-agent`
 ssh-add $k8s_key
 scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_key \
@@ -144,11 +148,6 @@ else
   echo; echo "$0 $(date): Skipping ceph (not yet working for AIO deployment)"
 fi
 
-#echo; echo "Setting up Prometheus..."
-#scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
-#  $k8s_user@$k8s_master:/home/$k8s_user/.
-#run_master "bash prometheus-tools.sh setup"
-
 echo; echo "$0 $(date): Setting up cloudify..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/cloudify \
   $k8s_user@$k8s_master:/home/$k8s_user/.
@@ -158,10 +157,10 @@ run_master "bash cloudify/k8s-cloudify.sh setup"
 echo; echo "$0 $(date): Verifying kubernetes+helm+ceph+cloudify install..."
 run "bash $HOME/models/tools/cloudify/k8s-cloudify.sh demo start"
 
-echo; echo "$0 $(date): Setting up VES"
+echo; echo "$0 $(date): Setting up VES..."
 # not re-cloned if existing - allows patch testing locally
 if [[ ! -d ~/ves ]]; then
-  echo; echo "$0 $(date): Cloning VES"
+  echo; echo "$0 $(date): Cloning VES..."
   git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
 fi
 # Can't pass quoted strings in commands
@@ -169,19 +168,34 @@ start=$((`date +%s`/60))
 bash $HOME/ves/tools/demo_deploy.sh $k8s_user $k8s_master cloudify
 step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_user $k8s_master cloudify"
 
+echo; echo "Setting up Prometheus..."
+scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
+  $k8s_user@$k8s_master:/home/$k8s_user/.
+run_master "bash prometheus-tools.sh setup prometheus helm"
+run_master "bash prometheus-tools.sh setup grafana helm $k8s_master:3000"
+
+echo; echo "Installing clearwater-docker..."
+run "bash $HOME/models/tests/k8s-cloudify-clearwater.sh start $k8s_master blsaws latest"
+
+echo; echo "Waiting 5 minutes for clearwater IMS to be fully ready..."
+sleep 300
+
+echo; echo "Run clearwater-live-test..."
+run "bash $HOME/models/tests/k8s-cloudify-clearwater.sh test $k8s_master"
+ 
 echo; echo "$0 $(date): All done!"
 deploy_end=$((`date +%s`/60))
 runtime=$((deploy_end-deploy_start))
 log "Deploy \"$1\" duration = $runtime minutes"
 
 source ~/ves/tools/ves_env.sh
-port=$(bash ~/models/tools/cloudify/k8s-cloudify.sh port nginx)
 #echo "Prometheus UI is available at http://$k8s_master:30990"
 echo "InfluxDB API is available at http://$ves_influxdb_host:$ves_influxdb_port/query&db=veseventsdb&q=<string>"
 echo "Grafana dashboards are available at http://$ves_grafana_host:$ves_grafana_port (login as $ves_grafana_auth)"
 echo "Grafana API is available at http://$ves_grafana_auth@$ves_grafana_host:$ves_grafana_port/api/v1/query?query=<string>"
 echo "Kubernetes API is available at https://$k8s_master:6443/api/v1/"
 echo "Cloudify API access example: curl -u admin:admin --header 'Tenant: default_tenant' http://$k8s_master/api/v3.1/status"
+port=$(bash ~/models/tools/cloudify/k8s-cloudify.sh nodePort nginx)
 echo "Cloudify-deployed demo app nginx is available at http://$k8s_master:$port"
 if [[ "$k8s_master" != "$k8s_workers" ]]; then
   export NODE_PORT=$(ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_user@$k8s_master kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services dw-dokuwiki)
