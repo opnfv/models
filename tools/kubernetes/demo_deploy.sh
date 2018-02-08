@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2017 AT&T Intellectual Property, Inc
+# Copyright 2017-2018 AT&T Intellectual Property, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -144,11 +144,6 @@ else
   echo; echo "$0 $(date): Skipping ceph (not yet working for AIO deployment)"
 fi
 
-#echo; echo "Setting up Prometheus..."
-#scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
-#  $k8s_user@$k8s_master:/home/$k8s_user/.
-#run_master "bash prometheus-tools.sh setup"
-
 echo; echo "$0 $(date): Setting up cloudify..."
 scp -r -o StrictHostKeyChecking=no ~/models/tools/cloudify \
   $k8s_user@$k8s_master:/home/$k8s_user/.
@@ -169,6 +164,18 @@ start=$((`date +%s`/60))
 bash $HOME/ves/tools/demo_deploy.sh $k8s_user $k8s_master cloudify
 step_end "bash $HOME/ves/tools/demo_deploy.sh $k8s_user $k8s_master cloudify"
 
+echo; echo "Setting up Prometheus"
+scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
+  $k8s_user@$k8s_master:/home/$k8s_user/.
+run_master "bash prometheus-tools.sh setup prometheus helm"
+run_master "bash prometheus-tools.sh setup grafana helm $k8s_master:3000"
+
+echo; echo "Installing clearwater-docker"
+run "bash ../tests/k8s-cloudify-clearwater.sh start $k8s_master blsaws latest"
+
+echo; echo "Run clearwater-live-test"
+run "bash ../tests/k8s-cloudify-clearwater.sh test $k8s_master"
+ 
 echo; echo "$0 $(date): All done!"
 deploy_end=$((`date +%s`/60))
 runtime=$((deploy_end-deploy_start))
