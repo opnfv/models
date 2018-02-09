@@ -137,6 +137,15 @@ kubectl cp $hpod:/usr/share/clearwater/bin/clearwater-socket-factory-sig-wrapper
 kubectl cp $hpod:/usr/share/clearwater/bin/clearwater-socket-factory-mgmt-wrapper ~/tmp/clearwater-socket-factory-mgmt-wrapper -c homestead
 kubectl delete deployment --namespace default homestead-prov
 kubectl delete service --namespace default homestead-prov
+
+hppod=$(kubectl get pods --namespace default | awk '/homestead-prov/ {print $1}')
+while [[ "$hppod" != "" ]] ; do
+  echo "waiting 10 seconds for homestead-prov to be deleted..."
+  sleep 10
+  hppod=$(kubectl get pods --namespace default | awk '/homestead-prov/ {print $1}')
+done
+
+echo "Redeploying homestead-prov..."
 cd clearwater-docker/kubernetes
 kubectl apply -f homestead-prov-depl.yaml
 kubectl apply -f homestead-prov-svc.yaml
@@ -147,6 +156,7 @@ while [[ "$hppod" == "null" ]] ; do
   sleep 10
   hppod=$(kubectl get pods --namespace default | awk '/homestead-prov/ {print $1}')
 done
+hppod=$(kubectl get pods --namespace default | awk '/homestead-prov/ {print $1}')
 status=$(kubectl get pods -o json --namespace default $hppod | jq -r '.status.phase')
 while [[ "$status" != "Running" ]]; do
   echo; echo "$hppod is $status ... waiting 10 seconds"
