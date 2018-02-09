@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2017 AT&T Intellectual Property, Inc
+# Copyright 2017-2018 AT&T Intellectual Property, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -268,20 +268,7 @@ function node_port() {
   while [[ "$nodePort" == "null" && $tries -gt 0 ]]; do
     curl -s -u admin:admin --header 'Tenant: default_tenant' \
       -o ~/tmp/json http://$k8s_master/api/v3.1/node-instances
-    ni=$(jq -r '.items | length' ~/tmp/json)
-    while [[ $ni -ge 0 ]]; do
-      ((ni--))
-      depid=$(jq -r ".items[$ni].deployment_id" ~/tmp/json)
-      type=$(jq -r ".items[$ni].runtime_properties.kubernetes.kind" ~/tmp/json)
-      if [[ "$depid" == "$name" && "$type" == "Service" ]]; then
-        svcId=$ni
-        nodePort=$(jq -r ".items[$ni].runtime_properties.kubernetes.spec.ports[0].node_port" ~/tmp/json)
-        if [[ "$nodePort" != "null" ]]; then
-          echo "nodePort=$nodePort"
-          export nodePort
-        fi
-      fi
-    done
+    nodePort=$(cat tmp/json | jq -r ".items[] | select(.node_id == \"${name}_service\")" | jq -r '.runtime_properties.kubernetes.spec.ports[0].node_port')
     sleep 10
     ((tries--))
   done
