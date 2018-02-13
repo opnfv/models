@@ -51,12 +51,6 @@
 #.     <user>: username on the target host. Also used to indicate OS name.
 #.     clean: uninstalls cloudify CLI and Manager
 #.
-#. If using this script to start/stop blueprints with multiple k8s environments,
-#. before invoking the script copy the k8s_env.sh script from the target
-#. cluster and copy to ~/k8s_env.sh, e.g.
-#.   scp centos@sm-1:/home/centos/k8s_env.sh ~/k8s_env_sm-1.sh
-#.   cp ~/k8s_env_sm-1.sh ~/k8s_env.sh
-#.
 #. Status: this is a work in progress, under test.
 
 function fail() {
@@ -324,6 +318,7 @@ function start() {
 
   log "package the blueprint"
   # CLI: cfy blueprints package -o ~/tmp/$bp $bp
+	mkdir -p ~/tmp
   tar ckf ~/tmp/blueprint.tar $bp
 
   log "upload the blueprint"
