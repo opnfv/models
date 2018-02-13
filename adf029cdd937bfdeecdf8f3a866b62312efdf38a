@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "5a3f45e8_b178c82c",
+        "filename": "tools/cloudify/k8s-cloudify.sh",
+        "patchSetId": 4
+      },
+      "lineNbr": 321,
+      "author": {
+        "id": 2997
+      },
+      "writtenOn": "2018-02-13T18:32:51Z",
+      "side": 1,
+      "message": "mkdir -p ~/tmp",
+      "range": {
+        "startLine": 321,
+        "startChar": 1,
+        "endLine": 321,
+        "endChar": 42
+      },
+      "revId": "adf029cdd937bfdeecdf8f3a866b62312efdf38a",
+      "serverId": "bbac25d2-bf60-4904-9ba8-a72fc000d6c5",
+      "unresolved": false
+    }
+  ]
+}
