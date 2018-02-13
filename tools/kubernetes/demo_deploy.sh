@@ -42,12 +42,14 @@
 #.             worker, or folder (e.g. "/ceph")
 #. <extras>: optional name of script for extra setup functions as needed
 #.
-#. The script will create a k8s environment setup file specific to the master
-#. hostname, e.g. k8s_env_k8s-1.sh. This allows multiple deploys to be invoked
-#. from the same admin server, by 
-#.
 #. See tools/demo_deploy.sh in the OPNFV VES repo for additional environment
 #. variables (mandatory/optional) for VES
+
+trap 'fail' ERR
+
+function fail() {
+  exit 1
+}
 
 function run() {
   start=$((`date +%s`/60))
@@ -77,11 +79,12 @@ deploy_start=$((`date +%s`/60))
 extras=${10}
 
 if [[ "$4" != "$5" ]]; then
-  k8s_master_hostname=$(echo $1 | cut -d ' ' -f 1)
+  k8s_master_hostname=$(echo "$1" | cut -d ' ' -f 1)
 else
   k8s_master_hostname=$1
 fi
-cat <<EOF >~/k8s_env_$k8s_master_hostname.sh
+cat <<EOF >~/k8s_env.sh
+#!/bin/bash
 k8s_nodes="$1"
 k8s_user=$2
 k8s_key=$3
@@ -103,7 +106,7 @@ export k8s_pub_net
 export k8s_ceph_mode
 export k8s_ceph_dev
 EOF
-source ~/k8s_env_$k8s_master_hostname.sh
+source ~/k8s_env.sh
 env | grep k8s_
 
 echo; echo "$0 $(date): Deploying base OS for master and worker nodes..."
@@ -116,7 +119,7 @@ ssh-add $k8s_key
 scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_key \
   $k8s_user@$k8s_master:/home/$k8s_user/$k8s_key
 scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-  ~/k8s_env_$k8s_master_hostname.sh $k8s_user@$k8s_master:/home/$k8s_user/k8s_env.sh
+  ~/k8s_env.sh $k8s_user@$k8s_master:/home/$k8s_user/k8s_env.sh
 
 echo; echo "$0 $(date): Setting up kubernetes master..."
 scp -r -o UserKnownHostsFile=/dev/null  -o StrictHostKeyChecking=no \
