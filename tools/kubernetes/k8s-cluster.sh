@@ -261,7 +261,7 @@ EOF
     fi
     ssh -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
       $USER@$worker bash prereqs.sh
-    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ~/k8s_env_$k8s_master_hostname.sh \
+    scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ~/k8s_env.sh \
       $USER@$worker:/home/$USER/k8s_env.sh
     scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
       start_worker.sh $USER@$worker:/home/$USER/.
