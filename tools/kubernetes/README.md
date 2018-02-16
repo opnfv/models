@@ -33,7 +33,6 @@ Here is an overview of the deployment process, which if desired can be completed
     * verify operation with a hello world k8s chart (nginx)
     * deploy ceph (ceph-helm or on bare metal) and verify basic PVC jobs
     * verify operation with a more complex (PVC-dependent) k8s chart (dokuwiki)
-  * [/tools/prometheus/prometheus-tools.sh](/tools/prometheus/prometheus-tools.sh): setup prometheus server, exporters on all nodes, and grafana
   * [/tools/cloudify/k8s-cloudify.sh](/tools/cloudify/k8s-cloudify.sh): setup cloudify (cli and manager)
   * verify kubernetes+ceph+cloudify operation with a PVC-dependent k8s chart deployed thru cloudify
   * (VES repo) tools/demo_deploy.sh: deploy OPNFV VES
@@ -42,6 +41,9 @@ Here is an overview of the deployment process, which if desired can be completed
     * deploy VES dashboard in grafana (reuse existing grafana above)
     * deploy VES agent (OPNFV Barometer "VES Application")
     * on each worker, deploy OPNFV Barometer collectd plugin
+  * [/tools/prometheus/prometheus-tools.sh](/tools/prometheus/prometheus-tools.sh): setup prometheus server and exporters on all nodes
+	* [/tests/k8s-cloudify-clearwater.sh](/tests/k8s-cloudify-clearwater.sh): deploy clearwater-docker and run clearwater-live-test
+    * note: kubectl is currently used to deploy the clearwater-docker charts; use of cloudify-kubernetes for this is coming soon.
 * when done, these demo elements are available, as described in the script output
   * Helm-deployed demo app dokuwiki
   * Cloudify-deployed demo app nginx
@@ -49,12 +51,13 @@ Here is an overview of the deployment process, which if desired can be completed
   * Grafana dashboards and API
   * Kubernetes API
   * Cloudify API
+	* Clearwater-docker
 
-See comments in [setup script](k8s-cluster.sh) and the other scripts for more info.
+See comments in the [overall demo deploy script](demo_deploy.sh), the [k8s setup script](k8s-cluster.sh), and the other scripts for more info.
 
 See [readme in the folder above](/tools/README.md) for an illustration of the resulting k8s cluster in a hybrid cloud environment.
-
-The flow for this demo deployment is illustrated below.
+	
+The flow for this demo deployment is illustrated below (note: clearwater-docker deploy/test not yet shown)
 
 ![models_demo_flow.svg](/docs/images/models_demo_flow.svg "models_demo_flow.svg")
 
