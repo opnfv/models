@@ -42,7 +42,7 @@ Here is an overview of the deployment process, which if desired can be completed
     * deploy VES agent (OPNFV Barometer "VES Application")
     * on each worker, deploy OPNFV Barometer collectd plugin
   * [/tools/prometheus/prometheus-tools.sh](/tools/prometheus/prometheus-tools.sh): setup prometheus server and exporters on all nodes
-	* [/tests/k8s-cloudify-clearwater.sh](/tests/k8s-cloudify-clearwater.sh): deploy clearwater-docker and run clearwater-live-test
+  * [/tests/k8s-cloudify-clearwater.sh](/tests/k8s-cloudify-clearwater.sh): deploy clearwater-docker and run clearwater-live-test
     * note: kubectl is currently used to deploy the clearwater-docker charts; use of cloudify-kubernetes for this is coming soon.
 * when done, these demo elements are available, as described in the script output
   * Helm-deployed demo app dokuwiki
@@ -51,7 +51,7 @@ Here is an overview of the deployment process, which if desired can be completed
   * Grafana dashboards and API
   * Kubernetes API
   * Cloudify API
-	* Clearwater-docker
+  * Clearwater-docker
 
 See comments in the [overall demo deploy script](demo_deploy.sh), the [k8s setup script](k8s-cluster.sh), and the other scripts for more info.
 
