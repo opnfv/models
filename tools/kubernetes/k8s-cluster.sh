@@ -46,18 +46,21 @@
 #. Status: work in progress, incomplete
 #
 
-trap 'fail' ERR
+# TODO: Debug why some commands below will trigger fail incorrectly
+#  trap 'fail' ERR
 
-function fail() {
-  log $1
-  exit 1
-}
+#  function fail() {
+#    log $1
+#    exit 1
+#  }
 
 function log() {
   f=$(caller 0 | awk '{print $2}')
   l=$(caller 0 | awk '{print $1}')
   echo; echo "$f:$l ($(date)) $1"
-  kubectl get pods --all-namespaces
+  if [[ "$kubectl_status" == "ready" ]]; then
+    kubectl get pods --all-namespaces
+  fi
 }
 
 function setup_prereqs() {
@@ -85,15 +88,27 @@ if [[ "$dist" == "ubuntu" ]]; then
 
   wait_dpkg; sudo apt-get update
   wait_dpkg; sudo apt-get upgrade -y
-  echo; echo "prereqs.sh: ($(date)) Install latest docker"
-  wait_dpkg; sudo apt-get install -y docker.io
-  # Alternate for 1.12.6
-  #sudo apt-get install -y libltdl7
-  #wget https://packages.docker.com/1.12/apt/repo/pool/main/d/docker-engine/docker-engine_1.12.6~cs8-0~ubuntu-xenial_amd64.deb
-  #sudo dpkg -i docker-engine_1.12.6~cs8-0~ubuntu-xenial_amd64.deb
-  sudo service docker restart
+
+  dce=$(dpkg -l | grep -c docker-ce)
+  if [[ $dce -eq 0 ]]; then
+    echo; echo "prereqs.sh: ($(date)) Install latest docker-ce"
+    # Per https://docs.docker.com/engine/installation/linux/docker-ce/ubuntu/
+    sudo apt-get remove -y docker docker-engine docker.io docker-ce
+    sudo apt-get update
+    sudo apt-get install -y \
+      apt-transport-https \
+      ca-certificates \
+      curl \
+      software-properties-common
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    sudo add-apt-repository "deb [arch=amd64] \
+      https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    sudo apt-get update
+    sudo apt-get install -y docker-ce
+  fi
+
   echo; echo "prereqs.sh: ($(date)) Get k8s packages"
-  export KUBE_VERSION=1.7.5
+  export KUBE_VERSION=1.10.0
   # per https://kubernetes.io/docs/setup/independent/create-cluster-kubeadm/
   # Install kubelet, kubeadm, kubectl per https://kubernetes.io/docs/setup/independent/install-kubeadm/
   sudo apt-get update && sudo apt-get install -y apt-transport-https
@@ -179,8 +194,15 @@ function setup_k8s_master() {
   log "Reset kubeadm in case pre-existing cluster"
   sudo kubeadm reset
   # Start cluster
-  log "Start the cluster"
+  log "Workaround issue '/etc/kubernetes/manifests is not empty'"
 	mkdir ~/tmp
+  # workaround for [preflight] Some fatal errors occurred:
+	#                /etc/kubernetes/manifests is not empty
+  sudo rm -rf /etc/kubernetes/manifests/*
+  log "Disable swap to workaround k8s incompatibility with swap"
+  # per https://github.com/kubernetes/kubeadm/issues/610
+  sudo swapoff -a
+  log "Start the cluster"
   sudo kubeadm init --pod-network-cidr=192.168.0.0/16 >>~/tmp/kubeadm.out
   cat ~/tmp/kubeadm.out
   export k8s_joincmd=$(grep "kubeadm join" ~/tmp/kubeadm.out)
@@ -188,6 +210,7 @@ function setup_k8s_master() {
   mkdir -p $HOME/.kube
   sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+  export KUBECONFIG=$HOME/.kube/config
   # Deploy pod network
   log "Deploy calico as CNI"
   # Updated to deploy Calico 2.6 per the create-cluster-kubeadm guide above
@@ -198,7 +221,7 @@ function setup_k8s_master() {
   # Failure to wait for all calico pods to be running can cause the first worker
   # to be incompletely setup. Symptom is that node_ports cannot be routed
   # via that node (no response - incoming SYN packets are dropped). 
-  log "Wait for calico pods to be Running"
+  log "Wait for all calico pods to be Created"
   # calico-etcd, calico-kube-controllers, calico-node
   pods=$(kubectl get pods --namespace kube-system | grep -c calico)
   while [[ $pods -lt 3 ]]; do
@@ -207,23 +230,24 @@ function setup_k8s_master() {
     pods=$(kubectl get pods --namespace kube-system | grep -c calico)
   done
   
-  pods=$(kubectl get pods --all-namespaces | awk '/calico/ {print $2}')
+  log "Wait for all calico pods to be Running"
+  pods=$(kubectl get pods --namespace kube-system | awk '/calico/ {print $1}')
   for pod in $pods; do
-    status=$(kubectl get pods --all-namespaces | awk "/$pod/ {print \$4}")
+    status=$(kubectl get pods --namespace kube-system | awk "/$pod/ {print \$3}")
     while [[ "$status" != "Running" ]]; do
       log "$pod status is $status. Waiting 10 seconds"
       sleep 10
-      status=$(kubectl get pods --all-namespaces | awk "/$pod/ {print \$4}")
+      status=$(kubectl get pods --namespace kube-system | awk "/$pod/ {print \$3}")
     done
     log "$pod status is $status"
   done
 
   log "Wait for kubedns to be Running"
-  kubedns=$(kubectl get pods --all-namespaces | awk '/kube-dns/ {print $4}')
+  kubedns=$(kubectl get pods --namespace kube-system | awk '/kube-dns/ {print $3}')
   while [[ "$kubedns" != "Running" ]]; do
     log "kube-dns status is $kubedns. Waiting 60 seconds"
     sleep 60
-    kubedns=$(kubectl get pods --all-namespaces | awk '/kube-dns/ {print $4}')
+    kubedns=$(kubectl get pods --namespace kube-system | awk '/kube-dns/ {print $3}')
   done
   log "kube-dns status is $kubedns"
 

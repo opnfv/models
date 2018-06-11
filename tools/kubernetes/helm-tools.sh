@@ -39,13 +39,16 @@ function log() {
 function setup_helm() {
   log "Setup helm"
   # Install Helm
+  # per https://github.com/kubernetes/helm/blob/master/docs/install.md
   cd ~
   curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get > get_helm.sh
   chmod 700 get_helm.sh
   ./get_helm.sh
+  log "Initialize helm"
   helm init
-  nohup helm serve > /dev/null 2>&1 &
-  helm repo update
+#  nohup helm serve > /dev/null 2>&1 &
+#  log "Run helm repo update"
+#  helm repo update
   # TODO: Workaround for bug https://github.com/kubernetes/helm/issues/2224
   # For testing use only!
   kubectl create clusterrolebinding permissive-binding \
@@ -69,7 +72,8 @@ function setup_helm() {
 
 function wait_for_service() {
   log "Waiting for service $1 to be available"
-  pod=$(kubectl get pods --namespace default | awk "/$1/ { print \$1 }")
+  # TODO: fix 'head' workaround for more than one pod per service
+  pod=$(kubectl get pods --namespace default | awk "/$1/ { print \$1 }" | head -1)
   log "Service $1 is at pod $pod"
   ready=$(kubectl get pods --namespace default -o jsonpath='{.status.containerStatuses[0].ready}' $pod)
   while [[ "$ready" != "true" ]]; do

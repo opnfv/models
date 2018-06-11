@@ -29,11 +29,11 @@
 #.   helm: setup/clean via helm
 #.   agents: for docker-based setup, a quoted, space-separated list agent nodes
 #.     note: node running this script must have ssh-key enabled access to agents
-#. $ bash prometheus-tools.sh <setup|clean> grafana <docker|helm> [URI] [creds]
+#. $ bash prometheus-tools.sh <setup|clean> grafana <docker|helm> [server] [creds]
 #.   grafana: setup/clean grafana
 #.   docker: setup/clean via docker
 #.   helm: setup/clean via helm
-#.   URI: optional URI of grafana server to use
+#.   server: optional host:port of grafana server to use
 #.   creds: optional grafana credentials (default: admin:admin)
 #
 
@@ -60,6 +60,7 @@ function fail() {
 }
 
 function setup_prometheus() {
+  trap 'fail' ERR
   log "Setup prometheus"
 	log "Setup prerequisites"
   if [[ "$dist" == "ubuntu" ]]; then
@@ -126,6 +127,7 @@ EOF
 }
 
 function setup_grafana() {
+  trap 'fail' ERR
   host_ip=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
   if [[ "$grafana" == "" ]]; then
     if [[ "$how" == "docker" ]]; then
@@ -138,10 +140,10 @@ function setup_grafana() {
       log "Setup grafana via Helm"
       #TODO: add  --set server.persistentVolume.storageClass=general
       helm install --name gf stable/grafana \
-        --set server.service.nodePort=30330 \
-        --set server.service.type=NodePort \
-        --set server.adminPassword=admin \
-        --set server.persistentVolume.enabled=false
+        --set service.nodePort=30330 \
+        --set service.type=NodePort \
+        --set adminPassword=admin \
+        --set persistentVolume.enabled=false
     fi
     grafana=$host_ip:30330
   fi
