@@ -28,8 +28,9 @@
 #. - Password-less ssh key provided for node setup
 #. - hostname of kubernetes master setup in DNS or /etc/hosts
 #. Usage: on the MAAS server
-#. $ git clone https://gerrit.opnfv.org/gerrit/models ~/models
-#. $ bash ~/models/tools/kubernetes/demo_deploy.sh "<hosts>" <os> <key>
+#. $ git clone https://gerrit.opnfv.org/gerrit/models models
+#. $ git clone https://gerrit.opnfv.org/gerrit/ves ves
+#. $ bash models/tools/kubernetes/demo_deploy.sh "<hosts>" <os> <key>
 #.   <master> "<workers>" <pub-net> <priv-net> <ceph-mode> "<ceph-dev>"
 #.   <base|all> [<extras>]
 #. <hosts>: space separated list of hostnames managed by MAAS
@@ -89,7 +90,7 @@ if [[ "$4" != "$5" ]]; then
 else
   k8s_master_hostname=$1
 fi
-cat <<EOF >~/k8s_env.sh
+cat <<EOF >k8s_env.sh
 #!/bin/bash
 k8s_nodes="$1"
 k8s_user=$2
@@ -112,13 +113,13 @@ export k8s_pub_net
 export k8s_ceph_mode
 export k8s_ceph_dev
 EOF
-source ~/k8s_env.sh
+source k8s_env.sh
 env | grep k8s_
 
 echo; echo "$0 $(date): Deploying base OS for master and worker nodes..."
 start=$((`date +%s`/60))
-source ~/models/tools/maas/deploy.sh $k8s_user $k8s_key "$k8s_nodes" $extras
-step_end "source ~/models/tools/maas/deploy.sh $k8s_user $k8s_key \"$k8s_nodes\" $extras"
+source models/tools/maas/deploy.sh $k8s_user $k8s_key "$k8s_nodes" $extras
+step_end "source models/tools/maas/deploy.sh $k8s_user $k8s_key \"$k8s_nodes\" $extras"
 
 eval `ssh-agent`
 ssh-add $k8s_key
@@ -128,11 +129,11 @@ while ! scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $k8s_key
   sleep 10
 done
 scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
-  ~/k8s_env.sh $k8s_user@$k8s_master:/home/$k8s_user/k8s_env.sh
+  k8s_env.sh $k8s_user@$k8s_master:/home/$k8s_user/k8s_env.sh
 
 echo; echo "$0 $(date): Setting up kubernetes master..."
 scp -r -o UserKnownHostsFile=/dev/null  -o StrictHostKeyChecking=no \
-  ~/models/tools/kubernetes/* $k8s_user@$k8s_master:/home/$k8s_user/.
+  models/tools/kubernetes/* $k8s_user@$k8s_master:/home/$k8s_user/.
 run_master "bash k8s-cluster.sh master"
 
 if [[ "$k8s_master" != "$k8s_workers" ]]; then
@@ -161,14 +162,14 @@ else
 fi
 
 echo; echo "Setting up Prometheus..."
-scp -r -o StrictHostKeyChecking=no ~/models/tools/prometheus/* \
+scp -r -o StrictHostKeyChecking=no models/tools/prometheus/* \
   $k8s_user@$k8s_master:/home/$k8s_user/.
 run_master "bash prometheus-tools.sh setup prometheus helm"
 run_master "bash prometheus-tools.sh setup grafana helm"
 
 if [[ "$deploy" == "all" ]]; then
   echo; echo "$0 $(date): Setting up cloudify..."
-  scp -r -o StrictHostKeyChecking=no ~/models/tools/cloudify \
+  scp -r -o StrictHostKeyChecking=no models/tools/cloudify \
     $k8s_user@$k8s_master:/home/$k8s_user/.
   run_master "bash cloudify/k8s-cloudify.sh prereqs"
   run_master "bash cloudify/k8s-cloudify.sh setup"
@@ -178,9 +179,9 @@ if [[ "$deploy" == "all" ]]; then
 
   echo; echo "$0 $(date): Setting up VES..."
   # not re-cloned if existing - allows patch testing locally
-  if [[ ! -d ~/ves ]]; then
+  if [[ ! -d ves ]]; then
     echo; echo "$0 $(date): Cloning VES..."
-    git clone https://gerrit.opnfv.org/gerrit/ves ~/ves
+    git clone https://gerrit.opnfv.org/gerrit/ves ves
   fi
   # Can't pass quoted strings in commands
   start=$((`date +%s`/60))
@@ -211,12 +212,12 @@ if [[ "$k8s_master" != "$k8s_workers" ]]; then
 fi
 
 if [[ "$deploy" == "all" ]]; then
-  source ~/ves/tools/ves_env.sh
+  source ves/tools/ves_env.sh
   echo "InfluxDB API is available at http://$ves_influxdb_host:$ves_influxdb_port/query&db=veseventsdb&q=<string>"
   echo "Grafana dashboards are available at http://$ves_grafana_host:$ves_grafana_port (login as $ves_grafana_auth)"
   echo "Grafana API is available at http://$ves_grafana_auth@$ves_grafana_host:$ves_grafana_port/api/v1/query?query=<string>"
   echo "Cloudify API access example: curl -u admin:admin --header 'Tenant: default_tenant' http://$k8s_master/api/v3.1/status"
-  port=$(bash ~/models/tools/cloudify/k8s-cloudify.sh nodePort nginx)
+  port=$(bash models/tools/cloudify/k8s-cloudify.sh nodePort nginx)
   echo "Cloudify-deployed demo app nginx is available at http://$k8s_master:$port"
 fi
 

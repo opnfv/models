@@ -73,15 +73,18 @@ function setup_helm() {
 function wait_for_service() {
   log "Waiting for service $1 to be available"
   # TODO: fix 'head' workaround for more than one pod per service
-  pod=$(kubectl get pods --namespace default | awk "/$1/ { print \$1 }" | head -1)
-  log "Service $1 is at pod $pod"
-  ready=$(kubectl get pods --namespace default -o jsonpath='{.status.containerStatuses[0].ready}' $pod)
-  while [[ "$ready" != "true" ]]; do
-    log "pod $1 is not yet ready... waiting 10 seconds"
+  pods=$(kubectl get pods --namespace default | awk "/$1/ { print \$1 }")
+  log "Service $1 is at pod(s) $pods"
+  ready="false"
+  while [[ "$ready" != "true" ]] ; do
+    log "Waiting 10 seconds to check pod status"
     sleep 10
-    # TODO: figure out why transient pods sometimes mess up this logic, thus need to re-get the pods
-    pod=$(kubectl get pods --namespace default | awk "/$1/ { print \$1 }")
-    ready=$(kubectl get pods --namespace default -o jsonpath='{.status.containerStatuses[0].ready}' $pod)
+    for pod in $pods ; do
+      ready=$(kubectl get pods --namespace default -o jsonpath='{.status.containerStatuses[0].ready}' $pod)
+      if [[ "$ready" != "true" ]]; then
+        log "pod $1 is $ready"
+      fi
+    done
   done
   log "pod $pod is ready"
   host_ip=$(kubectl get pods --namespace default -o jsonpath='{.status.hostIP}' $pod)
